@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 state/test_schema.py)",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(.venv/bin/python state/test_schema.py)",
+      "Bash(.venv/bin/python agent/loop.py)",
+      "Bash(.venv/bin/python agent/llm_client.py)"
+    ]
+  }
+}
