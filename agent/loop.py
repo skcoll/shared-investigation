@@ -19,6 +19,7 @@ from state.schema import (
     ActionRecord,
     Intervention,
 )
+from agent.llm_client import load_config
 
 
 # ---------------------------------------------------------------------------
@@ -100,9 +101,13 @@ def apply_intervention(state: InvestigationState, iv: Intervention) -> Investiga
 def run(
     challenge_id: str,
     agent_variant: str,
+    config: dict | None = None,
     build_prompt_fn=None,
     max_steps: int = 10,
 ) -> InvestigationState:
+
+    if config is None:
+        config = load_config()
 
     if build_prompt_fn is None:
         build_prompt_fn = stub_build_prompt
@@ -190,7 +195,10 @@ def run(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    config = load_config()
+    print(f"Loaded config: {config}")
     run(
         challenge_id="picoctf_rev01",
         agent_variant="structured",
+        config=config,
     )

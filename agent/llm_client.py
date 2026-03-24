@@ -15,8 +15,13 @@ simply return an empty thinking string.
 Anthropic returns extended thinking as a separate content block.
 """
 
+import json
+import os
 import re
 from dataclasses import dataclass, field
+
+PROJECT_ROOT = os.path.join(os.path.dirname(__file__), "..")
+DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "llm.config")
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +95,6 @@ def _openai_compat_call(
     tool_call = None
     if message.tool_calls:
         tc = message.tool_calls[0]
-        import json
         tool_call = {
             "name": tc.function.name,
             "arguments": json.loads(tc.function.arguments),
@@ -148,6 +152,16 @@ def _anthropic_call(
             tool_call = {"name": block.name, "arguments": block.input}
 
     return LLMResponse(thinking=thinking, response=response, tool_call=tool_call)
+
+
+# ---------------------------------------------------------------------------
+# Config loader
+# ---------------------------------------------------------------------------
+
+def load_config(path: str = DEFAULT_CONFIG_PATH) -> dict:
+    """Load LLM config from a JSON file (default: llm.config at project root)."""
+    with open(path) as f:
+        return json.load(f)
 
 
 # ---------------------------------------------------------------------------

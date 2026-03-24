@@ -9,7 +9,8 @@
       "Bash(.venv/bin/python agent/loop.py)",
       "Bash(.venv/bin/python agent/llm_client.py)",
       "Bash(.venv/bin/python agent/baseline.py)",
-      "Bash(.venv/bin/python agent/structured.py)"
+      "Bash(.venv/bin/python agent/structured.py)",
+      "Bash(.venv/bin/python -c \"from agent.llm_client import load_config; print\\(load_config\\(\\)\\)\")"
     ]
   }
 }

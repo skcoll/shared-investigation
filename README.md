@@ -64,7 +64,7 @@ Two agent variants solve the same CTF challenges. Both run through the same loop
 │
 ├── agent/
 │   ├── loop.py                # Main agent loop (both variants use this)
-│   ├── llm_client.py          # LLM provider abstraction (stub/vllm/anthropic)
+│   ├── llm_client.py          # LLM provider abstraction (stub/vllm/ollama/anthropic)
 │   ├── baseline.py            # Baseline prompt builder (control condition)
 │   └── structured.py          # Structured prompt builder (experimental condition)
 │
@@ -80,7 +80,8 @@ Two agent variants solve the same CTF challenges. Both run through the same loop
 │       ├── writeup_*.txt      # 5 raw writeup texts
 │       └── writeup_*.json     # 5 extracted + normalized reasoning steps
 │
-└── writeupfetch.py            # Utility to fetch writeups from the web
+├── llm.config                     # LLM provider configuration (JSON)
+└── writeupfetch.py                # Utility to fetch writeups from the web
 ```
 
 ## Core Data Model (`state/schema.py`)
@@ -139,6 +140,21 @@ Example configs:
 # vLLM with DeepSeek R1
 {"provider": "vllm", "model": "deepseek-r1", "base_url": "http://localhost:8000/v1"}
 ```
+
+### Configuration (`llm.config`)
+
+The LLM provider is configured via `llm.config` at the project root. `loop.py` loads this automatically — no need to pass config in code.
+
+```json
+{
+  "provider": "ollama",
+  "model": "llama3.1:8b",
+  "base_url": "http://localhost:11434/v1",
+  "api_key": "ollama"
+}
+```
+
+To switch providers, just edit this file. The `api_key` field is optional for Ollama (defaults to `"ollama"`) and vLLM (defaults to `"none"`), but required for Anthropic.
 
 ## Intervention Types
 
