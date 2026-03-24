@@ -7,7 +7,9 @@
       "Bash(.venv/bin/pip install:*)",
       "Bash(.venv/bin/python state/test_schema.py)",
       "Bash(.venv/bin/python agent/loop.py)",
-      "Bash(.venv/bin/python agent/llm_client.py)"
+      "Bash(.venv/bin/python agent/llm_client.py)",
+      "Bash(.venv/bin/python agent/baseline.py)",
+      "Bash(.venv/bin/python agent/structured.py)"
     ]
   }
 }

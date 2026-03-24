@@ -1,0 +1,104 @@
+PicoCTF Writeups: vault-door-3
+Welcome back, CTF enthusiasts! Today, we’re tackling the “Vault Door 3” challenge from PicoCTF 2019 (a continuation from these challenges: zero, one). This challenge is about reverse engineering Java code and understanding how loops and character arrays manipulate a password. Let’s break it down step by step to get the flag!
+Challenge Overview
+- Event: PicoCTF 2019
+- Challenge Name: Vault Door 3
+- Category: Reverse Engineering
+- Difficulty: Medium
+- Link: here
+Challenge Description
+This vault uses for-loops and byte arrays. The source code for this vault is here: VaultDoor3.java
+Hints: Make a table that contains each value of the loop variables and the corresponding buffer index that it writes to.
+Step 1: Understanding the Code
+The challenge provides the following Java code (the relevant part is the checkPassword method, which when true grants the user access):
+import java.util.*;
+class VaultDoor3 {
+public static void main(String args[]) {
+VaultDoor3 vaultDoor = new VaultDoor3();
+Scanner scanner = new Scanner(System.in);
+System.out.print("Enter vault password: ");
+String userInput = scanner.next();
+String input = userInput.substring("picoCTF{".length(),userInput.length()-1);
+if (vaultDoor.checkPassword(input)) {
+System.out.println("Access granted.");
+} else {
+System.out.println("Access denied!");
+}
+}
+// Our security monitoring team has noticed some intrusions on some of the
+// less secure doors. Dr. Evil has asked me specifically to build a stronger
+// vault door to protect his Doomsday plans. I just *know* this door will
+// keep all of those nosy agents out of our business. Mwa ha!
+//
+// -Minion #2671
+public boolean checkPassword(String password) {
+if (password.length() != 32) {
+return false;
+}
+char[] buffer = new char[32];
+int i;
+for (i=0; i<8; i++) {
+buffer[i] = password.charAt(i);
+}
+for (; i<16; i++) {
+buffer[i] = password.charAt(23-i);
+}
+for (; i<32; i+=2) {
+buffer[i] = password.charAt(46-i);
+}
+for (i=31; i>=17; i-=2) {
+buffer[i] = password.charAt(i);
+}
+String s = new String(buffer);
+return s.equals("jU5t_a_sna_3lpm18gb41_u_4_mfr340");
+}
+}
+What does it do?
+- It verifies if the input password (after manipulation) matches the string:
+“jU5t_a_sna_3lpm18gb41_u_4_mfr340”. - To solve this, we need to reverse the transformations applied to the password.
+Step 2: Reverse Engineering the Password
+To reverse engineer this, I translated the Java code into Python. The goal is to take the given string (jU5t_a_sna_3lpm18gb41_u_4_mfr340), simulate the loops, and reconstruct the original password.
+Here’s the Python script I created:
+def checkPassword(password):
+if not len(password) == 32:
+return False
+buffer = [""] * 32
+for i in range(8):
+buffer[i] = password[i]
+for i in range(8, 16):
+buffer[i] = password[23 - i]
+for i in range(16, 32, 2):
+buffer[i] = password[46 - i]
+for i in range(31, 16, -2):
+buffer[i] = password[i]
+print(''.join(buffer)) # Combine and print the reconstructed password
+checkPassword("jU5t_a_sna_3lpm18gb41_u_4_mfr340")
+Step 3: Key Observations and Adjustments
+- Python For Loops vs. Java For Loops:
+In Java, the conditioni >= 17
+allows the loop to include index17
+. However, in Python, therange
+function excludes the endpoint. To replicate the behavior, I adjusted the range to go from31
+to16
+in steps of-2
+. - Index Calculations:
+The values of23 - i
+and46 - i
+reverse the order of specific characters in the string. By carefully replicating these transformations, we can decode the original password. - Output:
+The script outputs the reconstructed password, which is the flag.
+Final Flag (in base64 encoding):
+cGljb0NURntqVTV0X2FfczFtcGwzX2FuNGdyNG1fNF91XzFmYjM4MH0=
+Note: To decode run:
+echo -n "encoded_string" | base64 --decode
+Real-World Applications
+Challenges like this demonstrate the importance of understanding program logic and loop structures. In real-world scenarios, similar techniques are used to:
+- Reverse engineer software to identify vulnerabilities or recover lost data (or to bypass game code verifications 😇, so I’ve heard/read).
+- Analyze obfuscated code in malware to understand its behavior.
+- Debug and optimize programs by breaking down their operations step by step.
+Reverse engineering isn’t just about solving puzzles — it’s a critical skill in cybersecurity, helping professionals understand complex systems.
+Final Thoughts
+The “Vault Door 3” challenge is a fantastic exercise in reverse engineering and understanding code logic. A great sequence to the other 2 we did already. By carefully translating the Java logic into Python, we successfully uncovered the original password.
+What did you think of this writeup? Share your thoughts, tips, or solutions in the comments below — I’d love to hear how you approached it!
+Happy hacking, and I’ll see you in the next write-up!
+Cheers,
+SoBatista

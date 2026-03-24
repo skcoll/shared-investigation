@@ -1,0 +1,30 @@
+{
+  "source": "karman",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The Java file contains a flag string embedded directly in the code.",
+      "evidence": "there is a flag which is scrambled"
+    },
+    {
+      "type": "observation",
+      "content": "The loops verify character positions of the provided input against the embedded flag.",
+      "evidence": "the loops tell us that the input we will be providing the program will check the character positions"
+    },
+    {
+      "type": "hypothesis",
+      "content": "Running the embedded flag string through the same loops will produce the correct flag.",
+      "evidence": "The simple solution to this problem is to reverse the logic."
+    },
+    {
+      "type": "action",
+      "content": "Fed the embedded flag string through the same loop with a print statement added.",
+      "evidence": "Providing the flag which is embedded in the code and then running it through the same loop and adding a print statement to get the exact flag"
+    },
+    {
+      "type": "result",
+      "content": "Running the modified program produced the correct flag.",
+      "evidence": "adding a print statement to get the exact flag!"
+    }
+  ]
+}
