@@ -19,7 +19,22 @@ from state.schema import (
     ActionRecord,
     Intervention,
 )
-from agent.llm_client import load_config
+from agent.llm_client import load_config, call as llm_call, LLMResponse
+from agent.baseline import build_prompt as baseline_build_prompt, SYSTEM_PROMPT as BASELINE_SYSTEM_PROMPT
+from agent.structured import build_prompt as structured_build_prompt, SYSTEM_PROMPT as STRUCTURED_SYSTEM_PROMPT, UPDATE_STATE_TOOL
+
+VARIANT_REGISTRY = {
+    "baseline": {
+        "build_prompt": baseline_build_prompt,
+        "system_prompt": BASELINE_SYSTEM_PROMPT,
+        "tools": None,
+    },
+    "structured": {
+        "build_prompt": structured_build_prompt,
+        "system_prompt": STRUCTURED_SYSTEM_PROMPT,
+        "tools": [UPDATE_STATE_TOOL],
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +67,16 @@ def stub_execute_tool(tool: str, args: dict) -> str:
     return f"[stub] {tool} output for args {args}"
 
 
-def stub_build_prompt(state: InvestigationState, messages: list[dict]) -> str:
+def stub_build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
     """Placeholder prompt builder — replaced by baseline.py or structured.py."""
-    return f"[stub prompt] step={state.step} challenge={state.challenge_id}"
+    return [{"role": "user", "content": f"[stub prompt] step={state.step} challenge={state.challenge_id}"}]
+
+
+def _extract_flag(text: str) -> str | None:
+    """Pull FLAG: <value> from response text, if present."""
+    import re
+    match = re.search(r"FLAG:\s*(.+)", text)
+    return match.group(1).strip() if match else None
 
 
 def stub_check_intervention(step: int) -> Intervention | None:
@@ -109,8 +131,16 @@ def run(
     if config is None:
         config = load_config()
 
+    # Resolve variant to get build_prompt, system_prompt, and tools
+    variant = VARIANT_REGISTRY.get(agent_variant)
     if build_prompt_fn is None:
-        build_prompt_fn = stub_build_prompt
+        if variant:
+            build_prompt_fn = variant["build_prompt"]
+        else:
+            build_prompt_fn = stub_build_prompt
+
+    system_prompt = variant["system_prompt"] if variant else ""
+    tools = variant["tools"] if variant else None
 
     # --- Initialize ---
     state = InvestigationState(
@@ -125,47 +155,67 @@ def run(
         state.step = step
 
         # --- AI TURN ---
-        prompt = build_prompt_fn(state, messages)
-        response = stub_llm_call(prompt)
+        prompt_messages = build_prompt_fn(state, messages)
+        llm_response = llm_call(
+            prompt_messages,
+            config=config,
+            system=system_prompt,
+            tools=tools,
+        )
 
-        # Apply state update from LLM response
-        upd = response.get("state_update", {})
+        print(f"[step {step}] thinking: {llm_response.thinking[:120]}...")
+        print(f"[step {step}] response: {llm_response.response[:120]}...")
 
-        if "new_observation" in upd:
-            obs_data = upd["new_observation"]
-            state.observations.append(Observation(
-                id=state.next_obs_id(),
-                content=obs_data["content"],
-                source=obs_data["source"],
+        # Apply state update from tool call (structured agent)
+        if llm_response.tool_call and llm_response.tool_call.get("name") == "update_investigation_state":
+            upd = llm_response.tool_call.get("arguments", {})
+
+            for obs_data in upd.get("new_observations", []):
+                state.observations.append(Observation(
+                    id=state.next_obs_id(),
+                    content=obs_data["content"],
+                    source=obs_data.get("source", "agent"),
+                    step=step,
+                ))
+
+            for hyp_data in upd.get("hypothesis_updates", []):
+                existing = state.get_hypothesis(hyp_data.get("id", "")) if "id" in hyp_data else None
+                if existing:
+                    existing.claim = hyp_data.get("claim", existing.claim)
+                    existing.status = hyp_data.get("status", existing.status)
+                    existing.confidence = hyp_data.get("confidence", existing.confidence)
+                    existing.step_updated = step
+                else:
+                    state.hypotheses.append(Hypothesis(
+                        id=state.next_hyp_id(),
+                        claim=hyp_data["claim"],
+                        status=hyp_data.get("status", "active"),
+                        confidence=hyp_data.get("confidence", "low"),
+                        origin="agent",
+                        step_created=step,
+                        step_updated=step,
+                    ))
+
+            if "new_next_steps" in upd:
+                state.next_steps = upd["new_next_steps"]
+
+            if "current_understanding" in upd:
+                state.current_understanding = upd["current_understanding"]
+
+        # Record the action (tool call from the analysis tools, if any)
+        if llm_response.tool_call and llm_response.tool_call.get("name") != "update_investigation_state":
+            tc = llm_response.tool_call
+            state.actions.append(ActionRecord(
                 step=step,
+                tool=tc["name"],
+                arguments=tc.get("arguments", {}),
+                result_summary=stub_execute_tool(tc["name"], tc.get("arguments", {})),
             ))
 
-        if "new_hypothesis" in upd:
-            hyp_data = upd["new_hypothesis"]
-            state.hypotheses.append(Hypothesis(
-                id=state.next_hyp_id(),
-                claim=hyp_data["claim"],
-                status="active",
-                confidence=hyp_data.get("confidence", "low"),
-                origin="agent",
-                step_created=step,
-                step_updated=step,
-            ))
-
-        if "current_understanding" in upd:
-            state.current_understanding = upd["current_understanding"]
-
-        # Record the action
-        state.actions.append(ActionRecord(
-            step=step,
-            tool=response["tool"],
-            arguments=response["tool_args"],
-            result_summary=stub_execute_tool(response["tool"], response["tool_args"]),
-        ))
-
-        # Check for flag
-        if response.get("flag_candidate"):
-            state.flag_candidate = response["flag_candidate"]
+        # Check for flag in response text
+        flag_match = _extract_flag(llm_response.response)
+        if flag_match:
+            state.flag_candidate = flag_match
             state.solved = True
             break
 
@@ -181,10 +231,7 @@ def run(
             print(json.dumps(state.model_dump(), indent=2))
 
         # Append to message history (used by baseline agent)
-        messages.append({"role": "assistant", "content": response.get("thinking", "")})
-
-        # Stop after one step for this skeleton
-        break
+        messages.append({"role": "assistant", "content": llm_response.response})
 
     print(f"\n=== Run complete. Solved: {state.solved} ===\n")
     return state
