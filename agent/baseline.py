@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from state.schema import InvestigationState
+from challenges.loader import load_challenge, format_challenge_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -62,9 +63,11 @@ def build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
     if the history is empty.
     """
     if not messages:
-        # First turn: seed the conversation with the challenge description
+        # First turn: seed the conversation with the challenge content
+        challenge = load_challenge(state.challenge_id)
+        challenge_text = format_challenge_prompt(challenge)
         return [
-            {"role": "user", "content": f"Challenge: {state.challenge_id}\n\nBegin your analysis."},
+            {"role": "user", "content": f"{challenge_text}\n\nBegin your analysis."},
         ]
 
     return list(messages)  # return history as-is

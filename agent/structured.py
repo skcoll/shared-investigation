@@ -20,6 +20,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from state.schema import InvestigationState
+from challenges.loader import load_challenge, format_challenge_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -170,11 +171,13 @@ def build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
     state_block = render_state(state)
 
     if not messages:
-        # First turn: challenge description + initial state
+        # First turn: challenge content + initial state
+        challenge = load_challenge(state.challenge_id)
+        challenge_text = format_challenge_prompt(challenge)
         content = (
             f"{state_block}\n\n"
             f"---\n"
-            f"Challenge: {state.challenge_id}\n\n"
+            f"{challenge_text}\n\n"
             f"Begin your analysis."
         )
         return [{"role": "user", "content": content}]

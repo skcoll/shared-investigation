@@ -10,7 +10,10 @@
       "Bash(.venv/bin/python agent/llm_client.py)",
       "Bash(.venv/bin/python agent/baseline.py)",
       "Bash(.venv/bin/python agent/structured.py)",
-      "Bash(.venv/bin/python -c \"from agent.llm_client import load_config; print\\(load_config\\(\\)\\)\")"
+      "Bash(.venv/bin/python -c \"from agent.llm_client import load_config; print\\(load_config\\(\\)\\)\")",
+      "Bash(.venv/bin/python challenges/init_challenge.py picoCTF2019_vaultdoor3)",
+      "Bash(.venv/bin/python -c \":*)",
+      "Bash(.venv/bin/python challenges/init_challenge.py picoCTF2019_vaultdoor1)"
     ]
   }
 }

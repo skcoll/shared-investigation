@@ -198,7 +198,7 @@ if __name__ == "__main__":
     config = load_config()
     print(f"Loaded config: {config}")
     run(
-        challenge_id="picoctf_rev01",
+        challenge_id="picoCTF2019_vaultdoor3",
         agent_variant="structured",
         config=config,
     )
