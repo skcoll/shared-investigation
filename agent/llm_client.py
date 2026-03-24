@@ -5,10 +5,12 @@ Thin wrapper around LLM providers. Returns a consistent LLMResponse regardless
 of provider. Supports:
   - "stub"      : fake responses for testing without any API
   - "vllm"      : local vLLM server (OpenAI-compatible), e.g. DeepSeek R1
+  - "ollama"    : local Ollama server (OpenAI-compatible), e.g. llama3.1:8b
   - "anthropic" : Anthropic API (Claude)
 
-DeepSeek R1 via vLLM embeds its reasoning inside <think>...</think> tags in
-the response content. This client parses those out into the thinking field.
+Models that embed reasoning inside <think>...</think> tags (e.g. DeepSeek R1)
+have those parsed out into the thinking field. Models without think tags
+simply return an empty thinking string.
 
 Anthropic returns extended thinking as a separate content block.
 """
@@ -42,8 +44,8 @@ def _stub_call(messages: list[dict], **kwargs) -> LLMResponse:
 
 
 # ---------------------------------------------------------------------------
-# vLLM provider (OpenAI-compatible API)
-# DeepSeek R1 and similar models that embed <think> blocks in content.
+# OpenAI-compatible provider (shared by vLLM and Ollama)
+# Parses <think>...</think> if present; otherwise thinking is empty.
 # ---------------------------------------------------------------------------
 
 def _parse_think_tags(content: str) -> tuple[str, str]:
@@ -58,7 +60,7 @@ def _parse_think_tags(content: str) -> tuple[str, str]:
     return thinking, response
 
 
-def _vllm_call(
+def _openai_compat_call(
     messages: list[dict],
     model: str,
     base_url: str,
@@ -69,7 +71,7 @@ def _vllm_call(
     try:
         from openai import OpenAI
     except ImportError:
-        raise ImportError("openai package required for vllm provider: pip install openai")
+        raise ImportError("openai package required for vllm/ollama provider: pip install openai")
 
     client = OpenAI(base_url=base_url, api_key=api_key)
 
@@ -162,22 +164,23 @@ def call(
     Call the LLM and return a normalised LLMResponse.
 
     config keys:
-      provider  : "stub" | "vllm" | "anthropic"
+      provider  : "stub" | "vllm" | "ollama" | "anthropic"
       model     : model name/id
-      base_url  : vLLM only — e.g. "http://localhost:8000/v1"
-      api_key   : vLLM (can be "none") or Anthropic key
+      base_url  : vLLM/Ollama — e.g. "http://localhost:11434/v1"
+      api_key   : vLLM (can be "none"), Ollama (defaults to "ollama"), or Anthropic key
     """
     provider = config.get("provider", "stub")
 
     if provider == "stub":
         return _stub_call(messages)
 
-    if provider == "vllm":
-        return _vllm_call(
+    if provider in ("vllm", "ollama"):
+        default_key = "ollama" if provider == "ollama" else "none"
+        return _openai_compat_call(
             messages=messages,
             model=config["model"],
             base_url=config["base_url"],
-            api_key=config.get("api_key", "none"),
+            api_key=config.get("api_key", default_key),
             tools=tools,
         )
 
@@ -190,7 +193,7 @@ def call(
             tools=tools,
         )
 
-    raise ValueError(f"Unknown provider: {provider!r}. Choose stub | vllm | anthropic")
+    raise ValueError(f"Unknown provider: {provider!r}. Choose stub | vllm | ollama | anthropic")
 
 
 # ---------------------------------------------------------------------------

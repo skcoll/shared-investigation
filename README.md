@@ -119,15 +119,26 @@ The **experimental condition**. The LLM receives everything the baseline gets, p
 
 ## LLM Client (`agent/llm_client.py`)
 
-A thin wrapper returning a consistent `LLMResponse(thinking, response, tool_call)` across three providers:
+A thin wrapper returning a consistent `LLMResponse(thinking, response, tool_call)` across four providers:
 
 | Provider | Use Case | Thinking Extraction |
 |----------|----------|---------------------|
 | `stub` | Testing without any API | Hardcoded response |
-| `vllm` | Local server (DeepSeek R1) | Parsed from `<think>...</think>` tags |
+| `vllm` | Local vLLM server (DeepSeek R1) | Parsed from `<think>...</think>` tags if present |
+| `ollama` | Local Ollama server (Llama, etc.) | Parsed from `<think>...</think>` tags if present |
 | `anthropic` | Claude API | Separate `thinking` content block |
 
-Config is a dict: `{"provider": "vllm", "model": "deepseek-r1", "base_url": "http://localhost:8000/v1"}`.
+`vllm` and `ollama` share the same OpenAI-compatible code path. Any model that emits `<think>` tags gets its reasoning parsed out; models that don't simply return an empty `thinking` string.
+
+Example configs:
+
+```python
+# Ollama with llama3.1:8b
+{"provider": "ollama", "model": "llama3.1:8b", "base_url": "http://localhost:11434/v1"}
+
+# vLLM with DeepSeek R1
+{"provider": "vllm", "model": "deepseek-r1", "base_url": "http://localhost:8000/v1"}
+```
 
 ## Intervention Types
 
@@ -160,13 +171,17 @@ For `picoCTF2019_vaultdoor3`, 5 writeups have been extracted and normalized (3-9
 ```bash
 # Setup
 python3 -m venv .venv
-.venv/bin/pip install pydantic
+.venv/bin/pip install pydantic openai
 
 # Test the schema
 .venv/bin/python state/test_schema.py
 
 # Run the loop skeleton (uses stubs, no API needed)
 .venv/bin/python agent/loop.py
+
+# Run with a local Ollama model (requires: ollama serve && ollama pull llama3.1:8b)
+# Update the config dict in your run script to:
+#   {"provider": "ollama", "model": "llama3.1:8b", "base_url": "http://localhost:11434/v1"}
 
 # Test individual agents
 .venv/bin/python agent/baseline.py
