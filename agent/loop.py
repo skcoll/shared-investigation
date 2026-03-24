@@ -21,18 +21,16 @@ from state.schema import (
 )
 from agent.llm_client import load_config, call as llm_call, LLMResponse
 from agent.baseline import build_prompt as baseline_build_prompt, SYSTEM_PROMPT as BASELINE_SYSTEM_PROMPT
-from agent.structured import build_prompt as structured_build_prompt, SYSTEM_PROMPT as STRUCTURED_SYSTEM_PROMPT, UPDATE_STATE_TOOL
+from agent.structured import build_prompt as structured_build_prompt, SYSTEM_PROMPT as STRUCTURED_SYSTEM_PROMPT
 
 VARIANT_REGISTRY = {
     "baseline": {
         "build_prompt": baseline_build_prompt,
         "system_prompt": BASELINE_SYSTEM_PROMPT,
-        "tools": None,
     },
     "structured": {
         "build_prompt": structured_build_prompt,
         "system_prompt": STRUCTURED_SYSTEM_PROMPT,
-        "tools": [UPDATE_STATE_TOOL],
     },
 }
 
@@ -77,6 +75,18 @@ def _extract_flag(text: str) -> str | None:
     import re
     match = re.search(r"FLAG:\s*(.+)", text)
     return match.group(1).strip() if match else None
+
+
+def _extract_state_update(text: str) -> dict | None:
+    """Extract a JSON block from ```json ... ``` fences in response text."""
+    import re
+    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return None
+    return None
 
 
 def stub_check_intervention(step: int) -> Intervention | None:
@@ -140,7 +150,6 @@ def run(
             build_prompt_fn = stub_build_prompt
 
     system_prompt = variant["system_prompt"] if variant else ""
-    tools = variant["tools"] if variant else None
 
     # --- Initialize ---
     state = InvestigationState(
@@ -160,16 +169,14 @@ def run(
             prompt_messages,
             config=config,
             system=system_prompt,
-            tools=tools,
         )
 
         print(f"[step {step}] thinking: {llm_response.thinking[:120]}...")
         print(f"[step {step}] response: {llm_response.response[:120]}...")
 
-        # Apply state update from tool call (structured agent)
-        if llm_response.tool_call and llm_response.tool_call.get("name") == "update_investigation_state":
-            upd = llm_response.tool_call.get("arguments", {})
-
+        # Apply state update from JSON block in response (structured agent)
+        upd = _extract_state_update(llm_response.response)
+        if upd:
             for obs_data in upd.get("new_observations", []):
                 state.observations.append(Observation(
                     id=state.next_obs_id(),
@@ -203,7 +210,7 @@ def run(
                 state.current_understanding = upd["current_understanding"]
 
         # Record the action (tool call from the analysis tools, if any)
-        if llm_response.tool_call and llm_response.tool_call.get("name") != "update_investigation_state":
+        if llm_response.tool_call:
             tc = llm_response.tool_call
             state.actions.append(ActionRecord(
                 step=step,
@@ -242,10 +249,19 @@ def run(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    config = load_config()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default=None, help="Path to LLM config file (default: llm.config)")
+    parser.add_argument("--challenge", default="picoCTF2019_vaultdoor3")
+    parser.add_argument("--variant", default="structured", choices=["baseline", "structured"])
+    parser.add_argument("--steps", type=int, default=10)
+    args = parser.parse_args()
+
+    config = load_config(args.config) if args.config else load_config()
     print(f"Loaded config: {config}")
     run(
-        challenge_id="picoCTF2019_vaultdoor3",
-        agent_variant="structured",
+        challenge_id=args.challenge,
+        agent_variant=args.variant,
         config=config,
+        max_steps=args.steps,
     )

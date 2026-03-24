@@ -140,20 +140,38 @@ Example configs:
 {"provider": "vllm", "model": "deepseek-r1", "base_url": "http://localhost:8000/v1"}
 ```
 
-### Configuration (`llm.config`)
+### Configuration
 
-The LLM provider is configured via `llm.config` at the project root. `loop.py` loads this automatically — no need to pass config in code.
+The LLM provider is configured via JSON config files at the project root. Multiple config files let you swap providers easily:
 
-```json
-{
-  "provider": "ollama",
-  "model": "llama3.1:8b",
-  "base_url": "http://localhost:11434/v1",
-  "api_key": "ollama"
-}
+- `llm.config` — default (loaded automatically)
+- `llm.config.anthropic` — Claude via Anthropic API
+
+```bash
+# Run with default config (Ollama)
+.venv/bin/python agent/loop.py
+
+# Run with Anthropic config
+.venv/bin/python agent/loop.py --config llm.config.anthropic
+
+# Override challenge and variant too
+.venv/bin/python agent/loop.py --config llm.config.anthropic --variant baseline --steps 5
 ```
 
-To switch providers, just edit this file. The `api_key` field is optional for Ollama (defaults to `"ollama"`) and vLLM (defaults to `"none"`), but required for Anthropic.
+**Ollama config** (`llm.config`):
+```json
+{"provider": "ollama", "model": "deepseek-r1:14b", "base_url": "http://localhost:11434/v1"}
+```
+
+**Anthropic config** (`llm.config.anthropic`):
+```json
+{"provider": "anthropic", "model": "claude-sonnet-4-20250514", "api_key": "env:ANTHROPIC_API_KEY"}
+```
+
+API keys can use `"env:VAR_NAME"` to read from environment variables instead of storing secrets in the file:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
 
 ## Intervention Types
 

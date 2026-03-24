@@ -14,7 +14,15 @@
       "Bash(.venv/bin/python challenges/init_challenge.py picoCTF2019_vaultdoor3)",
       "Bash(.venv/bin/python -c \":*)",
       "Bash(.venv/bin/python challenges/init_challenge.py picoCTF2019_vaultdoor1)",
-      "Bash(.venv/bin/python -c \"import agent.loop; print\\(''imports ok''\\)\")"
+      "Bash(.venv/bin/python -c \"import agent.loop; print\\(''imports ok''\\)\")",
+      "Bash(curl -s --max-time 3 http://localhost:11434/v1/models)",
+      "Bash(sysctl -n hw.memsize)",
+      "Read(//Users/susan/Documents/AI Projects/Shared Investigation Agent/{print $0/**)",
+      "Bash(sysctl -n machdep.cpu.brand_string)",
+      "Bash(sysctl -n hw.ncpu)",
+      "Bash(ollama list:*)",
+      "Bash(ollama pull:*)",
+      "Bash(.venv/bin/python -u agent/loop.py)"
     ]
   }
 }

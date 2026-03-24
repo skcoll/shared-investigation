@@ -134,9 +134,7 @@ Your goal is to analyse the given challenge and find the flag.
 - python_eval(code)        : execute a Python snippet and return the result
 
 You also have access to a shared investigation state (shown at the top of each
-message). After every turn, call update_investigation_state to record what you
-observed and what you now believe. This state is your working memory — keep it
-accurate and up to date.
+message). This state is your working memory — keep it accurate and up to date.
 
 If an intervention has been applied (visible in the state), treat it as a
 colleague's input: consider it seriously, but you may disagree if the evidence
@@ -148,7 +146,21 @@ Think step by step. At each turn:
 2. Describe what you observe and what it means.
 3. Update your hypotheses based on new evidence.
 4. Choose one analysis tool to call next and explain why.
-5. Call update_investigation_state with your updates.
+
+At the END of every response, emit a JSON block wrapped in ```json fences
+to update the investigation state. Example:
+
+```json
+{
+  "new_observations": [{"content": "what you saw", "source": "which tool"}],
+  "hypothesis_updates": [{"claim": "what you believe", "status": "active", "confidence": "medium"}],
+  "new_next_steps": ["step 1", "step 2"],
+  "current_understanding": "plain-language summary"
+}
+```
+
+To update an existing hypothesis, include its id:
+{"id": "hyp-001", "claim": "...", "status": "refuted", "confidence": "low"}
 
 If you believe you have found the flag, respond with:
 FLAG: <your answer>

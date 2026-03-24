@@ -78,7 +78,7 @@ def _openai_compat_call(
     except ImportError:
         raise ImportError("openai package required for vllm/ollama provider: pip install openai")
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client = OpenAI(base_url=base_url, api_key=api_key, timeout=600.0)
 
     call_kwargs = dict(model=model, messages=messages, **kwargs)
     if tools:
@@ -159,9 +159,25 @@ def _anthropic_call(
 # ---------------------------------------------------------------------------
 
 def load_config(path: str = DEFAULT_CONFIG_PATH) -> dict:
-    """Load LLM config from a JSON file (default: llm.config at project root)."""
+    """
+    Load LLM config from a JSON file (default: llm.config at project root).
+
+    Values starting with "env:" are resolved from environment variables.
+    Example: "api_key": "env:ANTHROPIC_API_KEY"
+    """
     with open(path) as f:
-        return json.load(f)
+        config = json.load(f)
+
+    # Resolve env: references
+    for key, value in config.items():
+        if isinstance(value, str) and value.startswith("env:"):
+            env_var = value[4:]
+            resolved = os.environ.get(env_var)
+            if not resolved:
+                raise ValueError(f"Config references {value!r} but ${env_var} is not set")
+            config[key] = resolved
+
+    return config
 
 
 # ---------------------------------------------------------------------------
