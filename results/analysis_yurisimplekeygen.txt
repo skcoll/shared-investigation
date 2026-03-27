@@ -1,0 +1,182 @@
+================================================================================
+EXPERIMENT ANALYSIS: yurisimplekeygen
+Model: deepseek-r1:14b (via Ollama on school server)
+Date: 2026-03-26
+Max steps: 15
+Interventions: step 3 (hint about checkSerial + try 16-char input),
+               step 7 (hint about char pair pattern + try abababababababab)
+================================================================================
+
+1. RESULTS SUMMARY
+================================================================================
+
+STRUCTURED AGENT (state visible, JSON state updates)
+-----------------------------------------------------
+  Run 1: SOLVED at step 4  | Solution: abcdefghijklmnop
+  Run 2: NOT SOLVED (15 steps) | Got stuck in JSON-format tool calls that weren't parsed
+  Run 3: SOLVED at step 14 | Solution: abcdabcdabcdabcd
+
+  Solve rate: 2/3 (67%)
+  Avg steps to solve: 9 (across solved runs)
+  Steps to solve: 4, -, 14
+
+BASELINE AGENT (no state, history only)
+-----------------------------------------------------
+  Run 1: NOT SOLVED (15 steps)
+  Run 2: NOT SOLVED (15 steps)
+  Run 3: NOT SOLVED (15 steps)
+
+  Solve rate: 0/3 (0%)
+  Avg steps to solve: N/A
+
+
+2. TOOL USAGE COMPARISON
+================================================================================
+
+STRUCTURED AGENT
+-----------------------------------------------------
+  Run 1: 2 tool calls (file, strings, then run_binary → solved)
+         Tools called: file(), strings(), run_binary(abcdefghijklmnop)
+         Tool diversity: 3 unique tools
+
+  Run 2: 0 tool calls (model emitted JSON-formatted tool calls instead of TOOL: format)
+         The model wrote: {"tool": "file", "args": ["SimpleKeyGen"]}
+         This was never parsed. The nudge messages didn't correct it.
+         15 steps with zero actual tool executions.
+
+  Run 3: 4 tool calls across 14 steps
+         Tools called: file(), readelf(FAIL), strings(), run_binary(INPUT→Bad),
+                       python_eval(CODE→error), run_binary(abcdabcdabcdabcd→solved)
+         Tool diversity: 4 unique tools attempted
+
+BASELINE AGENT
+-----------------------------------------------------
+  Run 1: 3 tool calls across 15 steps (file x2, strings x1)
+         Never called run_binary despite intervention suggesting it.
+         Got stuck repeatedly explaining what it would do rather than doing it.
+
+  Run 2: 6 tool calls across 15 steps (file x5, strings x0, run_binary x0)
+         Called file() 5 times with identical results. Never progressed to strings() or run_binary().
+         Completely stuck in a loop.
+
+  Run 3: 4 tool calls across 15 steps (file x4)
+         Called file() 4 times. Never called strings() or run_binary().
+         Same stuck-in-loop behavior as Run 2.
+
+
+3. KEY OBSERVATIONS
+================================================================================
+
+A. STRUCTURED AGENT ADVANTAGES
+   - When it worked (runs 1 & 3), it followed a logical investigation arc:
+     file() → strings() → run_binary(test) → run_binary(solution)
+   - Accepted and acted on interventions: when told "try run_binary(abcdefghijklmnop)",
+     it did so in the very next step.
+   - Built up observations and hypotheses in state, creating a visible record
+     of what was tried and what was learned.
+   - In run 3, recovered from errors (readelf not found, python_eval syntax error)
+     and eventually found a solution through experimentation.
+
+B. BASELINE AGENT FAILURES
+   - NEVER called run_binary() in any of the 3 runs (0/45 total steps).
+   - Got stuck calling file() repeatedly (up to 5 times in a single run)
+     without progressing to other tools.
+   - Interventions were completely ignored — despite being told
+     "try run_binary(abcdefghijklmnop)", the baseline agent never ran it.
+   - Produced long, verbose "step-by-step explanations" describing what it
+     WOULD do, rather than actually calling tools.
+   - Without visible state, the agent had no way to see it was repeating itself.
+
+C. INTERVENTION EFFECTIVENESS
+   - Structured agent: interventions led directly to tool calls in 2/3 runs.
+     The step-3 intervention ("try run_binary(abcdefghijklmnop)") was acted on
+     immediately in run 1 (solved at step 4).
+   - Baseline agent: interventions had zero observable effect in all 3 runs.
+     The model received the intervention text in its conversation history but
+     never acted on the suggested tool calls.
+
+D. FAILURE MODES
+   - Structured Run 2: model switched to a JSON tool-call format
+     ({"tool": "file", "args": [...]}) that the parser didn't recognize.
+     This is a prompt compliance issue — the model ignored TOOL: format.
+   - Baseline all runs: the model "describes" rather than "does" — it writes
+     multi-paragraph explanations of how one would analyze a binary, but
+     never actually executes the analysis.
+
+
+4. QUANTITATIVE COMPARISON
+================================================================================
+
+                            Structured      Baseline
+                            ----------      --------
+  Solve rate                2/3 (67%)       0/3 (0%)
+  Total tool calls          6               13
+  Unique tools used         4               2
+  run_binary calls          3               0
+  strings calls             2               1
+  file calls                1               12
+  Interventions acted on    2/2*            0/2*
+  Avg response length       ~600 chars      ~2000 chars
+
+  * In runs where the agent was making tool calls (structured runs 1&3,
+    all baseline runs had interventions but none were acted on)
+
+  Notable: Baseline made MORE total tool calls (13) than structured (6),
+  but they were almost all file() — showing repetitive, non-progressive behavior.
+  Structured made FEWER calls but with much higher diversity and purpose.
+
+
+5. HYPOTHESES ABOUT WHAT'S HAPPENING
+================================================================================
+
+H1: Visible state prevents repetition.
+    The structured agent can SEE its own observations and actions in the
+    rendered state block. When it sees "already ran file()", it moves to the
+    next tool. The baseline agent has no such memory and keeps calling file().
+
+H2: State creates a "to-do" effect.
+    The current_focus field acts as a directive — the model reads "current_focus:
+    binary string extraction" and knows what to do next. Without this, the
+    baseline agent drifts.
+
+H3: Interventions need state context to work.
+    When the intervention says "try run_binary(abcdefghijklmnop)", the structured
+    agent sees this as a hypothesis in its state and acts on it. The baseline
+    agent receives the same text in conversation history but treats it as just
+    another message to summarize rather than act on.
+
+H4: Small models need strong formatting guardrails.
+    DeepSeek R1 14b frequently ignored the TOOL: format (especially in baseline
+    mode) and wrote verbose explanations instead. The structured agent's explicit
+    "you MUST call a tool" combined with visible state was more effective at
+    keeping the model on-task.
+
+
+6. LIMITATIONS AND CAVEATS
+================================================================================
+
+- Sample size is very small (3 runs per condition). Results are indicative
+  but not statistically significant.
+- The interventions are very strong hints (essentially giving away the answer).
+  A fairer test would use weaker interventions.
+- Structured Run 2 failed due to a format compliance issue, not a reasoning
+  issue. With better parsing or a stronger model, this would likely have solved.
+- The model (deepseek-r1:14b) is small and struggles with instruction following.
+  A larger model (70b) or a different model (Claude) would likely show different
+  patterns.
+- Both agents receive the same interventions, so the comparison includes
+  the intervention effect. To isolate the state effect, we should also test
+  structured-without-interventions vs baseline-without-interventions.
+
+
+7. RECOMMENDED NEXT STEPS
+================================================================================
+
+1. Run the same experiment with a larger model (deepseek-r1:70b on school GPU)
+   to see if the baseline improves with more capable reasoning.
+2. Add a "structured, no interventions" condition to isolate the state effect
+   from the intervention effect.
+3. Add more challenges (2-3 crackmes of varying difficulty) to test
+   generalization.
+4. Implement JSONL step logging for reproducible quantitative analysis.
+5. Consider fine-tuning on the TOOL: format to improve compliance.

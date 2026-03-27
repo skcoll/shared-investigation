@@ -1,0 +1,38 @@
+Author:
+Yuri
+
+Language:
+C/C++
+
+Upload:
+2019-01-01 02:08
+
+Platform:
+Unix/linux etc.
+
+Difficulty:
+1.5 Rate!
+
+Quality:
+5.0 Rate!
+
+Arch:
+x86-64
+
+Downloads:
+205
+
+Size:
+2.79 KB
+
+Writeups:
+10
+
+Comments:
+25
+
+Description
+
+64 bit ELF keygen.
+
+Understand the algorithm, write a keygen for it

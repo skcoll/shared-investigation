@@ -1,0 +1,40 @@
+{
+  "source": "5c59f6f5 (r2 detailed walkthrough)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The binary is an x86-64 ELF executable, not stripped, making reversing easier.",
+      "evidence": "file SimpleKeyGen => ELF 64-bit LSB pie executable, x86-64 ... not stripped"
+    },
+    {
+      "type": "observation",
+      "content": "Running the binary without arguments shows it expects a SERIAL argument. Providing a wrong serial returns 'Bad Serial'.",
+      "evidence": "./SimpleKeyGen secret => Bad Serial"
+    },
+    {
+      "type": "observation",
+      "content": "The main function checks argc == 2, then calls checkSerial with argv[1]. If checkSerial returns 0, prints 'Good Serial'.",
+      "evidence": "calling some function called checkSerial and checks if it returns 0"
+    },
+    {
+      "type": "observation",
+      "content": "checkSerial compares the serial length to 0x10 (16 decimal). If not 16, returns failure.",
+      "evidence": "compares the length of the second argument to 0x10 (16 in decimal)"
+    },
+    {
+      "type": "hypothesis",
+      "content": "checkSerial compares every even-indexed character to its next character, requiring their difference to be -1. The second character in each pair must be exactly 1 greater in ASCII value.",
+      "evidence": "comparing every even index of the argument to its very next one. If the difference is -1 it's all fine"
+    },
+    {
+      "type": "action",
+      "content": "Test with example strings: 'ABCF' fails because A-B=-1 passes but C-F=-3 fails. Strings like 'abcdefghijklmnop' where each pair increments by 1 should work.",
+      "evidence": "'A' - 'B' = 0x41 - 0x42 = -1 so we pass; 'C' to 'F' is -3 so we failed"
+    },
+    {
+      "type": "result",
+      "content": "Valid serials include any 16-character string where odd indices are exactly 1 above their even counterparts, e.g. 'abcdefghijklmnop' or 'AB01CD23EF45GH67'.",
+      "evidence": "Examples: 0101010101010101, abcdefghijklmnop, AB01CD23EF45GH67"
+    }
+  ]
+}

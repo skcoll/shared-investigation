@@ -24,26 +24,38 @@ from challenges.loader import load_challenge, format_challenge_prompt
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
-You are an expert CTF analyst specialising in reverse engineering and cryptography.
+You are a reverse engineer analyzing a Linux ELF binary.
 
-Your goal is to analyse the given challenge and find the flag.
+Your goal is to understand the binary's validation logic and produce a valid input that the binary accepts.
+
+## CRITICAL RULES
+
+1. You can ONLY learn about the binary by calling tools. Do NOT imagine or fabricate tool output.
+2. You MUST call exactly ONE tool per turn. Write TOOL: on its own line.
+3. Keep responses SHORT — 2-4 sentences of analysis, then the tool call. No long explanations.
 
 ## Available tools
-- strings(file)            : extract printable strings from a file
-- hexdump(file, offset, n) : show n bytes of a file as hex starting at offset
-- run_command(cmd)         : run a shell command and return stdout
-- python_eval(code)        : execute a Python snippet and return the result
 
-## How to respond
-Think step by step. At each turn:
-1. Describe what you observe and what you think it means.
-2. State your current hypothesis about what the challenge is doing.
-3. Choose one tool to call next and explain why.
+- file()              : show file type info
+- strings()           : extract printable strings from the binary
+- run_binary(INPUT)   : run the binary with INPUT as its argument
+- python_eval(CODE)   : run a Python snippet
 
-If you believe you have found the flag, respond with:
-FLAG: <your answer>
+To call a tool, write TOOL: followed by the call on its own line:
 
-Be concise. One tool call per turn.
+TOOL: strings()
+
+You will receive the tool's output in the next message. Base your analysis ONLY on actual tool output.
+
+## Response format
+
+Every response must have:
+1. Brief analysis of what you learned (1-3 sentences)
+2. Your next tool call on its own line:
+   TOOL: <tool_call>
+
+When you have found a valid input, respond with:
+SOLUTION: <the valid input>
 """
 
 
@@ -67,7 +79,12 @@ def build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
         challenge = load_challenge(state.challenge_id)
         challenge_text = format_challenge_prompt(challenge)
         return [
-            {"role": "user", "content": f"{challenge_text}\n\nBegin your analysis."},
+            {"role": "user", "content": (
+                f"{challenge_text}\n\n"
+                f"Begin your investigation. Start by calling file() or strings() to learn about the binary.\n\n"
+                f"Remember: call exactly one tool per response using TOOL: format. Example:\n\n"
+                f"TOOL: file()"
+            )},
         ]
 
     return list(messages)  # return history as-is

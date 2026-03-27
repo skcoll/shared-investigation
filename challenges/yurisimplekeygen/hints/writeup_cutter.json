@@ -1,0 +1,35 @@
+{
+  "source": "677bf2b7 (Cutter analysis)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "Disassembly with Cutter reveals a checkSerial function that validates the serial key.",
+      "evidence": "I used Cutter to disassemble the file. I founded that a function checkSerial was called."
+    },
+    {
+      "type": "observation",
+      "content": "The key must be exactly 16 characters long; if not, the function returns 0xffffffff (failure).",
+      "evidence": "The key must be exactly 16 characters long. If the length is not 16, the function terminates with an error code (0xffffffff)."
+    },
+    {
+      "type": "observation",
+      "content": "The function iterates through pairs of adjacent characters. For each pair (key[i], key[i+1]), the difference key[i] - key[i+1] must be exactly -1.",
+      "evidence": "For each pair (key[i], key[i+1]), the ASCII difference key[i] - key[i+1] must be exactly -1."
+    },
+    {
+      "type": "hypothesis",
+      "content": "A valid key is any 16-character string where each character is followed by another character with an ASCII value greater by exactly 1.",
+      "evidence": "Each character must be followed by another character with an ASCII value greater by exactly 1."
+    },
+    {
+      "type": "action",
+      "content": "Generate valid keys by picking a random starting character and creating a 16-character ascending sequence.",
+      "evidence": "start_char = random.randint(ord('a'), ord('z') - 15); key = ''.join(chr(start_char + i) for i in range(16))"
+    },
+    {
+      "type": "result",
+      "content": "'abcdefghijklmnop' is a valid key: a(97)-b(98)=-1, b(98)-c(99)=-1, etc.",
+      "evidence": "Key: abcdefghijklmnop; a (97) - b (98) = -1"
+    }
+  ]
+}

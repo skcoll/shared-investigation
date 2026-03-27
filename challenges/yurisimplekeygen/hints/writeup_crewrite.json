@@ -1,0 +1,30 @@
+{
+  "source": "5c5aad2b (C rewrite + annotated assembly)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The key must be 16 characters long. checkSerial checks strlen(key) != 0x10.",
+      "evidence": "if (strlen(key) != 0x10) return false;"
+    },
+    {
+      "type": "observation",
+      "content": "The loop iterates through pairs (i += 2) and checks if key[i] - key[i+1] == -1.",
+      "evidence": "if (key[i]-key[i+1] == -1) continue; else return false;"
+    },
+    {
+      "type": "hypothesis",
+      "content": "Each pair of characters (positions 0-1, 2-3, etc.) must have the first character's ASCII value exactly 1 less than the second.",
+      "evidence": "each pair (0-1,2-3 etc) of characters in the key must subtract to equal -1"
+    },
+    {
+      "type": "action",
+      "content": "Generate valid keys by picking random printable ASCII values and appending char(x) + char(x+1) eight times.",
+      "evidence": "x = random.randrange(0x61, 0x7a); key += chr(x); key += chr(x + 1)"
+    },
+    {
+      "type": "result",
+      "content": "Valid keys include 'abababababababab' and 'abcdefghijklmnop'.",
+      "evidence": "key abababababababab or abcdefghijklmnop"
+    }
+  ]
+}

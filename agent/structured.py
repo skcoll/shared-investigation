@@ -88,6 +88,7 @@ UPDATE_STATE_TOOL = {
 def render_state(state: InvestigationState) -> str:
     lines = ["## Current Investigation State"]
 
+    lines.append(f"\n**Current focus:** {state.current_focus or '(not set)'}")
     lines.append(f"\n**Understanding:** {state.current_understanding or '(none yet)'}")
 
     if state.observations:
@@ -106,10 +107,10 @@ def render_state(state: InvestigationState) -> str:
     else:
         lines.append("\n**Hypotheses:** (none yet)")
 
-    if state.next_steps:
-        lines.append("\n**Next steps (priority order):**")
-        for i, step in enumerate(state.next_steps, 1):
-            lines.append(f"  {i}. {step}")
+    if state.actions:
+        lines.append("\n**Recent actions:**")
+        for a in state.actions[-5:]:  # last 5 actions
+            lines.append(f"  [step {a.step}] {a.tool}({a.arguments}) → {a.result_summary[:80]}")
 
     if state.interventions_applied:
         last = state.interventions_applied[-1]
@@ -123,49 +124,56 @@ def render_state(state: InvestigationState) -> str:
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
-You are an expert CTF analyst specialising in reverse engineering and cryptography.
+You are a reverse engineer analyzing a Linux ELF binary.
 
-Your goal is to analyse the given challenge and find the flag.
+Your goal is to understand the binary's validation logic and produce a valid input that the binary accepts.
+
+## CRITICAL RULES
+
+1. You can ONLY learn about the binary by calling tools. Do NOT imagine or fabricate tool output.
+2. You MUST call exactly ONE tool per turn. Write TOOL: on its own line.
+3. You MUST end every response with a ```json state update block.
+4. Keep responses SHORT — 2-4 sentences of analysis, then the tool call, then the JSON block. No long explanations.
 
 ## Available tools
-- strings(file)            : extract printable strings from a file
-- hexdump(file, offset, n) : show n bytes of a file as hex starting at offset
-- run_command(cmd)         : run a shell command and return stdout
-- python_eval(code)        : execute a Python snippet and return the result
 
-You also have access to a shared investigation state (shown at the top of each
-message). This state is your working memory — keep it accurate and up to date.
+- file()              : show file type info
+- strings()           : extract printable strings from the binary
+- run_binary(INPUT)   : run the binary with INPUT as its argument
+- python_eval(CODE)   : run a Python snippet
 
-If an intervention has been applied (visible in the state), treat it as a
-colleague's input: consider it seriously, but you may disagree if the evidence
-warrants it.
+To call a tool, write TOOL: followed by the call on its own line:
 
-## How to respond
-Think step by step. At each turn:
-1. Read the current investigation state.
-2. Describe what you observe and what it means.
-3. Update your hypotheses based on new evidence.
-4. Choose one analysis tool to call next and explain why.
+TOOL: strings()
 
-At the END of every response, emit a JSON block wrapped in ```json fences
-to update the investigation state. Example:
+You will receive the tool's output in the next message. Base your analysis ONLY on actual tool output.
 
+## Investigation state
+
+You have a shared investigation state (shown at the top of each message).
+This is your working memory. Keep it accurate.
+
+If an intervention appears in the state, treat it as a colleague's suggestion.
+
+## Response format
+
+Every response must have this structure:
+
+1. Brief analysis of what you learned (1-3 sentences)
+2. Your next tool call:
+   TOOL: <tool_call>
+3. State update:
 ```json
 {
-  "new_observations": [{"content": "what you saw", "source": "which tool"}],
-  "hypothesis_updates": [{"claim": "what you believe", "status": "active", "confidence": "medium"}],
-  "new_next_steps": ["step 1", "step 2"],
-  "current_understanding": "plain-language summary"
+  "new_observations": [{"content": "what you learned", "source": "tool_name"}],
+  "hypothesis_updates": [{"claim": "what you believe", "status": "active", "confidence": "low"}],
+  "current_focus": "what you are investigating next",
+  "current_understanding": "summary of what you know"
 }
 ```
 
-To update an existing hypothesis, include its id:
-{"id": "hyp-001", "claim": "...", "status": "refuted", "confidence": "low"}
-
-If you believe you have found the flag, respond with:
-FLAG: <your answer>
-
-Be concise. One analysis tool call per turn.
+When you have found a valid input, respond with:
+SOLUTION: <the valid input>
 """
 
 
@@ -190,12 +198,26 @@ def build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
             f"{state_block}\n\n"
             f"---\n"
             f"{challenge_text}\n\n"
-            f"Begin your analysis."
+            f"Begin your investigation. Start by calling file() or strings() to learn about the binary.\n\n"
+            f"Remember: you MUST call exactly one tool per response using TOOL: format. "
+            f"Example of a correct response:\n\n"
+            f"Let me start by examining what type of binary this is.\n\n"
+            f"TOOL: file()\n\n"
+            f"```json\n"
+            f'{{"new_observations": [], '
+            f'"hypothesis_updates": [], '
+            f'"current_focus": "determine binary type and architecture", '
+            f'"current_understanding": "starting investigation"}}\n'
+            f"```"
         )
         return [{"role": "user", "content": content}]
 
     # Subsequent turns: inject updated state into the latest user message
-    last_user = f"{state_block}\n\n---\nContinue your analysis."
+    last_user = (
+        f"{state_block}\n\n---\n"
+        f"Continue your investigation. Call exactly ONE tool using TOOL: format. "
+        f"End with a ```json state update block."
+    )
     return list(messages) + [{"role": "user", "content": last_user}]
 
 

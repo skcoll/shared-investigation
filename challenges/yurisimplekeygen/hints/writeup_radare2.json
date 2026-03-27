@@ -1,0 +1,45 @@
+{
+  "source": "5c2ea33a (radare2 analysis)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The binary is not stripped, making function names visible in analysis.",
+      "evidence": "file SimpleKeyGen ... not stripped"
+    },
+    {
+      "type": "observation",
+      "content": "The binary contains a function called checkSerial which is called from main with argv[1] as the argument.",
+      "evidence": "we find a function called sym.checkSerial"
+    },
+    {
+      "type": "observation",
+      "content": "checkSerial first checks that the serial has length 16 (0x10) via strlen, returning failure if not.",
+      "evidence": "cmp of the result value with 0x10 (dec 16), followed by a je to the end"
+    },
+    {
+      "type": "observation",
+      "content": "The function contains a loop from 0 to strlen(serial), incrementing by 2 each iteration. It calls strlen every iteration rather than caching the length.",
+      "evidence": "for each iteration of the loop, in the loop header strlen is called on the serial"
+    },
+    {
+      "type": "observation",
+      "content": "In the loop body, serial[i] and serial[i+1] are loaded, their difference is computed, and compared to -1.",
+      "evidence": "serial[i+1]-serial[i] is calculated and the program checks via cmp if the result is equal to -1"
+    },
+    {
+      "type": "hypothesis",
+      "content": "The program expects a serial of length 16 where each character at an even index is exactly 1 less than the character at the next odd index.",
+      "evidence": "the program expects a serial of length 16, in which each character is exactly 1 smaller than the next"
+    },
+    {
+      "type": "action",
+      "content": "Write a keygen: pick a random starting ASCII value (33-110) and generate 16 consecutive characters counting up.",
+      "evidence": "seed = randint(33, 110); print ''.join(chr(i) for i in range(seed, seed+16))"
+    },
+    {
+      "type": "result",
+      "content": "Running the keygen output against the binary produces 'Good Serial'.",
+      "evidence": "./SimpleKeyGen $(python keygen.py) => Good Serial"
+    }
+  ]
+}

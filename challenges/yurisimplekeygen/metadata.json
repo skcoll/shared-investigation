@@ -1,0 +1,16 @@
+{
+  "id": "yurisimplekeygen",
+  "description": "64 bit ELF keygen. Understand the algorithm, write a keygen for it.",
+  "artifacts": [
+    "SimpleKeyGen"
+  ],
+  "hints": [
+    "writeup_annotated_asm.json",
+    "writeup_crewrite.json",
+    "writeup_cutter.json",
+    "writeup_disasm.json",
+    "writeup_ghidra.json",
+    "writeup_r2detailed.json",
+    "writeup_radare2.json"
+  ]
+}

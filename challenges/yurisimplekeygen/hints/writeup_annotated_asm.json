@@ -1,0 +1,35 @@
+{
+  "source": "5e547137 (annotated assembly walkthrough)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "main() requires argc == 2, then calls checkSerial(argv[1]). Return value of 0 means 'Good Serial'.",
+      "evidence": "argc requires a value of 2, following which we call the function checkSerial() with argv[1]"
+    },
+    {
+      "type": "observation",
+      "content": "checkSerial first checks strlen(s) == 16 via call to strlen at 11ab, comparing result to 0x10.",
+      "evidence": "We require strlen(s) to be 16, otherwise -1 is returned"
+    },
+    {
+      "type": "observation",
+      "content": "A loop iterates with counter incrementing by 2 (var_14h += 2), checking counter < strlen(s) each iteration.",
+      "evidence": "for (int var_14h = 0; var14_h < strlen(s); var_14h += 2)"
+    },
+    {
+      "type": "observation",
+      "content": "The loop loads s[i] into edx and s[i+1] into eax, computes edx - eax, and checks if result equals -1 (0xffffffff).",
+      "evidence": "is s[i] - s[i + 1] == -1?"
+    },
+    {
+      "type": "hypothesis",
+      "content": "A valid serial is a 16-character string where adjacent pairs have ascending ASCII values (each char followed by char+1).",
+      "evidence": "we simply give a string of length 16 with increasing ascii value, e.g. 'abcdefghijklmnop'"
+    },
+    {
+      "type": "result",
+      "content": "The string 'abcdefghijklmnop' produces 'Good Serial'.",
+      "evidence": "e.g. 'abcdefghijklmnop' and we get good serial"
+    }
+  ]
+}

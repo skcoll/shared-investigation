@@ -104,6 +104,47 @@ def _openai_compat_call(
 
 
 # ---------------------------------------------------------------------------
+# Ollama native provider (uses /api/chat to get thinking traces)
+# The OpenAI-compatible endpoint strips <think> tags, but the native
+# Ollama API returns them in a separate message.thinking field.
+# ---------------------------------------------------------------------------
+
+def _ollama_native_call(
+    messages: list[dict],
+    model: str,
+    base_url: str,
+    **kwargs,
+) -> LLMResponse:
+    import urllib.request
+
+    # base_url might be "http://localhost:11434/v1" — strip /v1
+    api_base = base_url.rstrip("/")
+    if api_base.endswith("/v1"):
+        api_base = api_base[:-3]
+    url = f"{api_base}/api/chat"
+
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "stream": False,
+    }).encode()
+
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=1800) as resp:
+        data = json.loads(resp.read())
+
+    msg = data.get("message", {})
+    thinking = msg.get("thinking", "") or ""
+    content = msg.get("content", "") or ""
+
+    # Also try parsing <think> tags from content as fallback
+    if not thinking:
+        thinking, content = _parse_think_tags(content)
+
+    return LLMResponse(thinking=thinking, response=content)
+
+
+# ---------------------------------------------------------------------------
 # Anthropic provider
 # Extended thinking is returned as a separate content block.
 # ---------------------------------------------------------------------------
@@ -204,13 +245,19 @@ def call(
     if provider == "stub":
         return _stub_call(messages)
 
-    if provider in ("vllm", "ollama"):
-        default_key = "ollama" if provider == "ollama" else "none"
+    if provider == "ollama":
+        return _ollama_native_call(
+            messages=messages,
+            model=config["model"],
+            base_url=config["base_url"],
+        )
+
+    if provider == "vllm":
         return _openai_compat_call(
             messages=messages,
             model=config["model"],
             base_url=config["base_url"],
-            api_key=config.get("api_key", default_key),
+            api_key=config.get("api_key", "none"),
             tools=tools,
         )
 

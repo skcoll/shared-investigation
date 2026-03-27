@@ -1,0 +1,20 @@
+[
+  {
+    "id": "iv-001",
+    "step": 3,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The strings output shows 'checkSerial' and 'strlen' — the binary checks the serial length and has a dedicated validation function. Try: run_binary(abcdefghijklmnop) to test a 16-char input.",
+      "confidence": "high"
+    }
+  },
+  {
+    "id": "iv-002",
+    "step": 7,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The serial must be exactly 16 characters long AND each character pair (positions 0-1, 2-3, etc.) must have the second char be exactly 1 greater in ASCII value than the first. Try: run_binary(abababababababab)",
+      "confidence": "medium"
+    }
+  }
+]

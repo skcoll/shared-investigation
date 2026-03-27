@@ -1,250 +1,228 @@
 # Shared Investigation Agent
 
-A research prototype studying whether **explicit structured investigation state** enables effective coordination between human insight and AI exploration on cybersecurity CTF challenges.
+A research prototype studying whether **explicit structured investigation state** enables effective human-AI coordination on **reverse engineering** tasks.
 
 ## Research Question
 
 Does making an LLM's investigation state explicit and shared — rather than implicit in conversation history — improve human-AI teaming on analytical tasks?
 
-## Experimental Design
+## How It Works
 
-Two agent variants solve the same CTF challenges. Both run through the same loop, but differ in what the LLM sees:
+An LLM agent investigates a Linux ELF binary (crackme) by calling tools, forming hypotheses, and testing them. The agent loop runs the cycle: **hypothesize → experiment → observe → update**. Scripted interventions (derived from human writeups) inject hints at specific steps.
 
-| Condition | Agent | State Visible? | Interventions? |
-|-----------|-------|----------------|----------------|
-| A | Baseline | No | No |
-| B | Structured | Yes | No |
-| C | Structured | Yes | Light (add/reject hypothesis, mark important) |
-| D (stretch) | Structured | Yes | Strong (suggest action, reprioritize) |
+Two agent variants run the same loop:
 
-**Human proxies:** Real humans are replaced by multiple CTF writeups per challenge. Reasoning steps are extracted from writeups and aggregated into consensus traces, which become the source for scripted interventions.
+| Variant | What the LLM sees | State updated? |
+|---------|-------------------|----------------|
+| **Baseline** | System prompt + conversation history only | Yes (internally), but hidden from model |
+| **Structured** | System prompt + rendered `InvestigationState` + history | Yes, and visible — model must update it each turn |
+
+Comparing their behavior measures whether explicit shared state changes reasoning quality, tool usage, and responsiveness to interventions.
 
 ## Architecture
 
 ```
-                    ┌──────────────────────────┐
-                    │      loop.py             │
-                    │   (shared agent loop)    │
-                    └────┬──────────┬──────────┘
-                         │          │
-              ┌──────────┘          └──────────┐
-              ▼                                ▼
-   ┌─────────────────────┐          ┌─────────────────────┐
-   │   baseline.py       │          │   structured.py     │
-   │ build_prompt():     │          │ build_prompt():     │
-   │   history only      │          │   state + history   │
-   │   state is HIDDEN   │          │   state is VISIBLE  │
-   └─────────┬───────────┘          └─────────┬───────────┘
-             │                                │
-             └──────────┬─────────────────────┘
-                        ▼
-             ┌─────────────────────┐
-             │   llm_client.py    │
-             │                     │
-             │ stub  │ vllm │ anthropic
-             └─────────────────────┘
+                 ┌─────────────────────────────────┐
+                 │         loop.py                  │
+                 │  build prompt → LLM → parse tool │
+                 │  → execute tool → feed result    │
+                 │  → parse state update → intervene│
+                 └──────┬──────────────┬────────────┘
+                        │              │
+             ┌──────────┘              └──────────┐
+             ▼                                    ▼
+  ┌────────────────────┐            ┌────────────────────────┐
+  │   baseline.py      │            │   structured.py        │
+  │  history only      │            │  state + history       │
+  │  state HIDDEN      │            │  state VISIBLE         │
+  └────────┬───────────┘            └────────┬───────────────┘
+           └──────────┬──────────────────────┘
+                      ▼
+           ┌─────────────────────┐
+           │   llm_client.py    │
+           │  ollama │ vllm │   │
+           │  anthropic │ stub  │
+           └─────────────────────┘
+                      ▼
+           ┌─────────────────────┐
+           │     tools.py        │
+           │  file() strings()   │
+           │  run_binary() ←Docker│
+           │  python_eval()      │
+           └─────────────────────┘
 ```
 
-### Data Flow (one loop iteration)
+### Loop per step
 
-1. `build_prompt_fn(state, messages)` constructs the prompt
-2. LLM returns thinking + response + optional tool call
-3. Loop parses state updates (observations, hypotheses, understanding)
-4. Tool is executed, result recorded as `ActionRecord`
-5. **Intervention point**: check for scripted intervention, apply if present
-6. Append to message history, advance step
+1. `build_prompt(state, messages)` — with or without state depending on variant
+2. Call LLM → get thinking + response
+3. Parse `TOOL: name(args)` from response text
+4. Execute tool (locally or via Docker for ELF binaries)
+5. Feed tool output back as next user message
+6. Parse ```json state update block (structured agent)
+7. Check for solution (explicit `SOLUTION:` or binary accepted input)
+8. Intervention point — check for scripted interventions
+9. Append to message history, advance step
 
 ## Project Structure
 
 ```
 .
 ├── state/
-│   ├── schema.py              # Pydantic models (the core data structures)
-│   └── test_schema.py         # Smoke test for schema
+│   └── schema.py                  # Pydantic models (InvestigationState, Observation, Hypothesis, etc.)
 │
 ├── agent/
-│   ├── loop.py                # Main agent loop (both variants use this)
-│   ├── llm_client.py          # LLM provider abstraction (stub/vllm/ollama/anthropic)
-│   ├── baseline.py            # Baseline prompt builder (control condition)
-│   └── structured.py          # Structured prompt builder (experimental condition)
+│   ├── loop.py                    # Main agent loop (both variants use this)
+│   ├── llm_client.py              # LLM provider abstraction (stub/vllm/ollama/anthropic)
+│   ├── baseline.py                # Baseline prompt builder (control condition)
+│   ├── structured.py              # Structured prompt builder (experimental condition)
+│   └── tools.py                   # Real tool execution (file, strings, run_binary via Docker, python_eval)
 │
 ├── challenges/
 │   ├── init_challenge.py          # Script to scaffold/restructure challenges
 │   ├── loader.py                  # Load challenge content for agent prompts
 │   └── <challenge_id>/           # Standard layout per challenge:
 │       ├── problem.txt            #   problem description
-│       ├── artifacts/             #   files the agent can analyze
-│       │   └── SomeFile.java      #     (source, binaries, etc.)
-│       ├── hints/                 #   writeup JSONs for interventions
-│       │   └── author.json        #     (extracted reasoning steps)
+│       ├── artifacts/             #   binary files the agent analyzes
+│       ├── hints/                 #   writeup JSONs (extracted reasoning steps)
+│       ├── interventions.json     #   scripted interventions (step, type, payload)
 │       └── metadata.json          #   auto-generated by init_challenge.py
 │
-├── llm.config                     # LLM provider configuration (JSON)
-└── writeupfetch.py                # Utility to fetch writeups from the web
+├── llm.config                     # Default LLM config (Ollama)
+├── llm.config.server              # School server config (Ollama, remote)
+├── llm.config.anthropic           # Claude API config
+├── llm.config.llama4              # Llama 4 config
+└── remote.json                    # SSH/VM config for remote binary execution (optional)
 ```
 
-## Core Data Model (`state/schema.py`)
+## Tools
 
-Five Pydantic classes define the shared investigation state:
+The agent has 4 tools available:
 
-- **`Observation`** — a fact discovered via a tool (`id`, `content`, `source`, `step`, `important`)
-- **`Hypothesis`** — a testable claim (`id`, `claim`, `status`, `confidence`, `origin`, `step_created`, `step_updated`)
-- **`ActionRecord`** — a tool invocation and its result (`step`, `tool`, `arguments`, `result_summary`)
-- **`Intervention`** — a human/scripted state mutation (`id`, `type`, `payload`, `step`, `source`)
-- **`InvestigationState`** — the top-level container holding all of the above plus `next_steps`, `current_understanding`, `flag_candidate`, and `solved`
+| Tool | What it does | Execution |
+|------|-------------|-----------|
+| `file()` | Show file type and metadata | Local |
+| `strings()` | Extract printable strings from binary | Local |
+| `run_binary(INPUT)` | Run the ELF binary with INPUT as argument | Docker (linux/amd64) |
+| `python_eval(CODE)` | Execute a Python snippet | Local |
 
-Key design choices:
-- `Hypothesis.origin` is `"agent"` or `"intervention"` — this is how we measure whether the agent adopted externally-provided hypotheses
-- `Observation.important` is only set via the `mark_observation_as_important` intervention
-- `next_steps` is a plain `list[str]` (not a separate class) to keep things minimal
-
-## Agent Variants
-
-### Baseline (`agent/baseline.py`)
-
-The **control condition**. The LLM receives:
-- A system prompt describing the task and available tools
-- The conversation history
-
-`InvestigationState` exists in the loop and is updated from responses, but is **never shown to the model**. The model reasons purely from its own conversation history.
-
-### Structured (`agent/structured.py`)
-
-The **experimental condition**. The LLM receives everything the baseline gets, plus:
-- The current `InvestigationState` rendered as readable text at the top of every message
-- An `update_investigation_state` tool schema it must call each turn to update state
-- Instructions to treat intervention-origin hypotheses as "a colleague's input"
-
-`render_state()` converts the Pydantic object into human-readable markdown, including `[IMPORTANT]` flags on observations and `[from intervention]` tags on hypotheses.
-
-## LLM Client (`agent/llm_client.py`)
-
-A thin wrapper returning a consistent `LLMResponse(thinking, response, tool_call)` across four providers:
-
-| Provider | Use Case | Thinking Extraction |
-|----------|----------|---------------------|
-| `stub` | Testing without any API | Hardcoded response |
-| `vllm` | Local vLLM server (DeepSeek R1) | Parsed from `<think>...</think>` tags if present |
-| `ollama` | Local Ollama server (Llama, etc.) | Parsed from `<think>...</think>` tags if present |
-| `anthropic` | Claude API | Separate `thinking` content block |
-
-`vllm` and `ollama` share the same OpenAI-compatible code path. Any model that emits `<think>` tags gets its reasoning parsed out; models that don't simply return an empty `thinking` string.
-
-Example configs:
-
-```python
-# Ollama with llama3.1:8b
-{"provider": "ollama", "model": "llama3.1:8b", "base_url": "http://localhost:11434/v1"}
-
-# vLLM with DeepSeek R1
-{"provider": "vllm", "model": "deepseek-r1", "base_url": "http://localhost:8000/v1"}
+`run_binary` uses Docker to execute x86-64 Linux ELF binaries on macOS ARM via Rosetta:
+```bash
+docker run --rm --platform linux/amd64 -v challenges:/challenges:ro ubuntu:22.04 /challenges/.../Binary 'input'
 ```
 
-### Configuration
+## Investigation State (`state/schema.py`)
 
-The LLM provider is configured via JSON config files at the project root. Multiple config files let you swap providers easily:
+Five Pydantic classes:
 
-- `llm.config` — default (loaded automatically)
-- `llm.config.anthropic` — Claude via Anthropic API
+- **`Observation`** — a fact discovered via a tool (`content`, `source`, `step`)
+- **`Hypothesis`** — a testable claim (`claim`, `status`, `confidence`, `origin`)
+- **`ActionRecord`** — a tool call and its result (`tool`, `arguments`, `result_summary`)
+- **`Intervention`** — a scripted state mutation (`type`, `payload`, `step`)
+- **`InvestigationState`** — container with `current_focus`, `current_understanding`, `solution_candidate`, `solved`
+
+Key: `Hypothesis.origin` is `"agent"` or `"intervention"` — measures whether the agent adopted externally-provided hypotheses.
+
+## LLM Providers
+
+| Provider | Config file | Thinking traces | Notes |
+|----------|------------|-----------------|-------|
+| `ollama` | `llm.config` | Yes (native `message.thinking` field) | DeepSeek R1 recommended |
+| `vllm` | — | Yes (`<think>` tags) | For school server with GPU |
+| `anthropic` | `llm.config.anthropic` | Yes (extended thinking) | ~$0.17/run, fastest |
+| `stub` | — | Hardcoded | For testing without API |
+
+Ollama uses the native `/api/chat` endpoint (not OpenAI-compatible) to preserve DeepSeek R1's thinking traces.
+
+### Swapping configs
 
 ```bash
-# Run with default config (Ollama)
-.venv/bin/python agent/loop.py
+# Local Ollama (default)
+.venv/bin/python agent/loop.py --challenge yurisimplekeygen
 
-# Run with Anthropic config
-.venv/bin/python agent/loop.py --config llm.config.anthropic
+# School server
+.venv/bin/python agent/loop.py --config llm.config.server --challenge yurisimplekeygen
 
-# Override challenge and variant too
-.venv/bin/python agent/loop.py --config llm.config.anthropic --variant baseline --steps 5
-```
-
-**Ollama config** (`llm.config`):
-```json
-{"provider": "ollama", "model": "deepseek-r1:14b", "base_url": "http://localhost:11434/v1"}
-```
-
-**Anthropic config** (`llm.config.anthropic`):
-```json
-{"provider": "anthropic", "model": "claude-sonnet-4-20250514", "api_key": "env:ANTHROPIC_API_KEY"}
-```
-
-API keys can use `"env:VAR_NAME"` to read from environment variables instead of storing secrets in the file:
-```bash
+# Claude API
 export ANTHROPIC_API_KEY="sk-ant-..."
+.venv/bin/python agent/loop.py --config llm.config.anthropic --challenge yurisimplekeygen
 ```
 
-## Intervention Types
+API keys use `"env:VAR_NAME"` syntax to avoid storing secrets in config files.
 
-Interventions are typed mutations to `InvestigationState`, not free-text hints:
+## Interventions
 
-| Type | Category | Effect |
-|------|----------|--------|
-| `add_hypothesis` | Light | Adds a new hypothesis with `origin="intervention"` |
-| `reject_hypothesis` | Light | Sets an existing hypothesis status to `"refuted"` |
-| `mark_observation_as_important` | Light | Flags an observation for the agent's attention |
-| `suggest_action` | Strong | Proposes a specific tool call |
-| `reprioritize_next_steps` | Strong | Reorders the agent's next-steps list |
+Scripted interventions are loaded from `challenges/<id>/interventions.json`:
 
-Currently `add_hypothesis` is implemented in `loop.py`; the rest are stubbed and will live in `state/intervention.py`.
+```json
+[
+  {"id": "iv-001", "step": 3, "type": "add_hypothesis",
+   "payload": {"claim": "The serial must be 16 chars long", "confidence": "high"}}
+]
+```
 
-## Writeup Processing Pipeline
-
-Each challenge has multiple writeups that serve as human reasoning proxies:
-
-1. **Fetch** — `writeupfetch.py` pulls writeup text from URLs
-2. **Extract** — reasoning steps are extracted into JSON with schema: `{"source", "steps": [{"type", "content", "evidence"}]}`
-3. **Normalize** — duplicates merged, vague steps removed, hypotheses made testable, steps made atomic
-
-Step types: `observation`, `hypothesis`, `action`, `result`.
-
-For `picoCTF2019_vaultdoor3`, 5 writeups have been extracted and normalized (3-9 steps each).
+Currently only `add_hypothesis` is implemented. Interventions are derived from writeup analysis — multiple writeups per challenge are extracted into structured reasoning steps, and consensus insights become intervention payloads.
 
 ## Adding a New Challenge
 
 ```bash
-# 1. Scaffold a new challenge directory
-.venv/bin/python challenges/init_challenge.py picoCTF2024_somechallenge
+# 1. Scaffold
+.venv/bin/python challenges/init_challenge.py my_new_challenge
 
-# 2. Fill in the files:
-#    - Edit problem.txt with the challenge description
-#    - Drop source code / binaries into artifacts/
-#    - Drop writeup JSONs into hints/
+# 2. Add files
+#    - Edit problem.txt
+#    - Put binary in artifacts/
+#    - Put writeup JSONs in hints/
+#    - Create interventions.json
 
-# 3. Regenerate metadata.json after adding files
-.venv/bin/python challenges/init_challenge.py picoCTF2024_somechallenge
+# 3. Regenerate metadata
+.venv/bin/python challenges/init_challenge.py my_new_challenge
+
+# 4. Run
+.venv/bin/python agent/loop.py --challenge my_new_challenge --steps 10
 ```
 
-To restructure an existing challenge that has `*_problem.txt` and loose files:
+## Setup
 
 ```bash
-# Automatically moves files into the standard layout
-.venv/bin/python challenges/init_challenge.py picoCTF2019_vaultdoor3
-```
-
-## Running
-
-```bash
-# Setup
+# Python environment
 python3 -m venv .venv
 .venv/bin/pip install pydantic openai
 
-# Configure your LLM provider (edit llm.config)
-# Then run the loop — it loads llm.config automatically
-.venv/bin/python agent/loop.py
+# Docker (required for run_binary on macOS)
+# Install Docker Desktop — it uses Rosetta for linux/amd64 automatically
 
-# Test individual components
-.venv/bin/python state/test_schema.py
-.venv/bin/python agent/llm_client.py
-.venv/bin/python agent/baseline.py
-.venv/bin/python agent/structured.py
+# Pull the Docker image once
+docker pull --platform linux/amd64 ubuntu:22.04
+
+# Run
+.venv/bin/python agent/loop.py --challenge yurisimplekeygen --steps 10
 ```
 
-## Not Yet Implemented
+## Current Status
 
-- `state/intervention.py` — full `apply_intervention()` for all 5 intervention types
-- `agent/tools.py` — the 4 tools: `strings`, `hexdump`, `run_command`, `python_eval`
-- `instrumentation/logger.py` — JSONL step logger
-- `instrumentation/metrics.py` — solve rate, steps to solve, intervention uptake
-- `experiments/run.py` — CLI entry point to run conditions across challenges
-- Wiring `loop.py` to use real LLM calls instead of stubs
-- Challenge metadata and scripted intervention files
+**MVP is working.** The structured agent successfully solved `yurisimplekeygen` in 5 steps using DeepSeek R1 14b on a remote Ollama server:
+
+```
+Step 1: file()                          → identified ELF binary
+Step 3: intervention                    → "try run_binary(abcdefghijklmnop)"
+Step 5: run_binary(abcdefghijklmnop)    → "Good Serial" → SOLVED
+```
+
+## Work Remaining
+
+### High priority (experiment readiness)
+- Run baseline vs structured comparison on `yurisimplekeygen` (multiple runs for variance)
+- Add 2-3 more challenges for cross-challenge comparison
+- JSONL step logger for reproducible analysis (`instrumentation/logger.py`)
+- Metrics computation: solve rate, steps to solve, intervention uptake (`instrumentation/metrics.py`)
+
+### Medium priority (experiment quality)
+- Experiment runner CLI (`experiments/run.py`) — run all conditions across all challenges
+- More intervention types (`reject_hypothesis`, `mark_observation_as_important`)
+- Writeup consensus pipeline — aggregate multiple writeups into intervention candidates
+
+### Future / stretch
+- Fine-tuning small models on RE reasoning traces
+- Larger model comparison (DeepSeek R1 70b on school server GPU)
+- Human-in-the-loop mode (real-time interventions instead of scripted)

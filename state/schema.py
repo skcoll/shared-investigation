@@ -46,12 +46,11 @@ class InvestigationState(BaseModel):
     observations: list[Observation] = Field(default_factory=list)
     hypotheses: list[Hypothesis] = Field(default_factory=list)
     actions: list[ActionRecord] = Field(default_factory=list)
-    next_steps: list[str] = Field(default_factory=list)  # plain strings, priority-ordered
-
+    current_focus: str = ""                   # what the agent is currently trying to understand
     current_understanding: str = ""           # free-text summary the agent maintains
     interventions_applied: list[Intervention] = Field(default_factory=list)
 
-    flag_candidate: str | None = None
+    solution_candidate: str | None = None
     solved: bool = False
 
     # --- ID generators ---

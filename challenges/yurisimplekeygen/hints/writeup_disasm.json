@@ -1,0 +1,35 @@
+{
+  "source": "5c5a0003 (disassembly breakdown)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The checkSerial subroutine begins at offset 1197, receives a pointer to the serial at [rbp-0x28].",
+      "evidence": "The interesting code is in the checkSerial subroutine beginning at offset 1197"
+    },
+    {
+      "type": "observation",
+      "content": "The serial length is checked at 11ab/11b0 — must equal 16 (0x10) or the function returns failure.",
+      "evidence": "The length of the serial is checked at 11ab and 11b0. If the length is not equal to 16 characters (0x10) the subroutine returns a failure."
+    },
+    {
+      "type": "observation",
+      "content": "A loop starting at 11c6 increments by 2 each iteration and terminates when the index equals the serial length.",
+      "evidence": "The index variable is incremented by 2 every loop (11ff), and the loop terminates when the index is equal to the serial length (1215)"
+    },
+    {
+      "type": "observation",
+      "content": "In the loop, the current character (eax) and next character (edx) are loaded. edx is subtracted from eax at 11f3. If the result is not -1, the loop returns failure.",
+      "evidence": "edx is subtracted from eax (11f3). If the result is -1 the loop continues, otherwise it ends in failure"
+    },
+    {
+      "type": "hypothesis",
+      "content": "The serial must be 16 characters long, and for every consecutive pair, the first character's byte value must be one less than the second character's byte value.",
+      "evidence": "for every consecutive pair of characters, the byte value of the first character must be one less than the byte value of the second character"
+    },
+    {
+      "type": "result",
+      "content": "Valid serials: '0123456789ABCDEF', 'abcdefghijklmnop', 'ABABABABABABABAB'.",
+      "evidence": "Examples: 0123456789ABCDEF, abcdefghijklmnop, ABABABABABABABAB"
+    }
+  ]
+}

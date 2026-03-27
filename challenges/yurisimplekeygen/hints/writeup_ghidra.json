@@ -1,0 +1,45 @@
+{
+  "source": "69810159 (Ghidra + objdump comprehensive)",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The binary is an ELF 64-bit PIE executable, not stripped. Symbol table shows functions: main, checkSerial, usage, plus libc imports (strlen, printf, puts, exit).",
+      "evidence": "objdump -t SimpleKeyGen | grep \" F \" => checkSerial, main, usage"
+    },
+    {
+      "type": "observation",
+      "content": "main checks argc == 2, passes argv[1] to checkSerial. If checkSerial returns 0, prints 'Good Serial'.",
+      "evidence": "the second argument of the program is passed to the checkSerial function"
+    },
+    {
+      "type": "observation",
+      "content": "checkSerial first checks strlen == 0x10 (16). If not, returns 0xffffffff (-1 in two's complement).",
+      "evidence": "cmp rax,0x10; je 11bd; mov eax,0xffffffff"
+    },
+    {
+      "type": "action",
+      "content": "Decompile checkSerial with Ghidra to get readable C pseudocode, then rename variables for clarity.",
+      "evidence": "param1 -> string, sVar1 -> string_len, local_1c -> i, uVar1 -> return_code"
+    },
+    {
+      "type": "observation",
+      "content": "Ghidra decompilation reveals: a for loop (i=0; i<strlen; i+=2) checks if string[i] - string[i+1] != -1, returning failure if so.",
+      "evidence": "if ((int)string[i] - (int)string[(long)i + 1] != -1) { return 0xffffffff; }"
+    },
+    {
+      "type": "hypothesis",
+      "content": "A valid key is any 16-character string of ascending ASCII characters, where each character's value is 1 less than the next. Example: 'A'(0x41) - 'B'(0x42) = -1.",
+      "evidence": "if we have 'A' (0x41) and 'B' (0x42), subtracting them yields -1. Therefore, a valid key is a string of 16 ascending characters"
+    },
+    {
+      "type": "action",
+      "content": "Write a C keygen that generates all valid printable-ASCII keys by iterating start characters from 0x20 to 0x6e and printing 16 consecutive chars.",
+      "evidence": "for (int i = 0; i < KEY_LEN - 1; i++) key[i] = start + i;"
+    },
+    {
+      "type": "result",
+      "content": "Successfully verified: './SimpleKeyGen abcdefghijklmnop' and other generated keys all produce 'Good Serial'.",
+      "evidence": "./SimpleKeyGen abcdefghijklmnop => Good Serial"
+    }
+  ]
+}
