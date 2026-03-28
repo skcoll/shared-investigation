@@ -1,19 +1,28 @@
 [
   {
     "id": "iv-001",
-    "step": 3,
+    "tier": 1,
     "type": "add_hypothesis",
     "payload": {
-      "claim": "The strings output shows 'checkSerial' and 'strlen' — the binary checks the serial length and has a dedicated validation function. Try: run_binary(abcdefghijklmnop) to test a 16-char input.",
+      "claim": "The strings output shows a function called checkSerial. Try disasm(checkSerial) to read its assembly code — the validation logic is likely there, not in main.",
       "confidence": "high"
     }
   },
   {
     "id": "iv-002",
-    "step": 7,
+    "tier": 1,
     "type": "add_hypothesis",
     "payload": {
-      "claim": "The serial must be exactly 16 characters long AND each character pair (positions 0-1, 2-3, etc.) must have the second char be exactly 1 greater in ASCII value than the first. Try: run_binary(abababababababab)",
+      "claim": "Look at the cmp and strlen calls in the disassembly — the binary checks the input length against a specific value before doing any other validation.",
+      "confidence": "medium"
+    }
+  },
+  {
+    "id": "iv-003",
+    "tier": 2,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The loop in checkSerial increments by 2 and compares adjacent characters using sub and cmp. This means the validation depends on the relationship between character pairs, not individual characters.",
       "confidence": "medium"
     }
   }

@@ -96,8 +96,25 @@ def _extract_tool_call(text: str) -> tuple[str, dict] | None:
     if name == "strings":
         return name, {"path": raw_arg or ""}
     if name == "run_binary":
-        return name, {"input": raw_arg}
+        # Strip JSON array brackets if model wrapped input: ["value"] → value
+        cleaned = raw_arg
+        if cleaned.startswith("[") and cleaned.endswith("]"):
+            cleaned = cleaned[1:-1]
+        cleaned = cleaned.strip("'\"")
+        return name, {"input": cleaned}
+    if name == "disasm":
+        return name, {"function": raw_arg}
     if name == "python_eval":
+        # For python_eval, re-extract with greedy match to capture full code
+        # including nested parens
+        py_match = re.search(r"TOOL:\s*python_eval\((.+)\)\s*$", text, re.MULTILINE | re.DOTALL)
+        if py_match:
+            code = py_match.group(1).strip().strip("'\"")
+            # Strip triple-quote wrappers
+            for q in ['"""', "'''"]:
+                if code.startswith(q) and code.endswith(q):
+                    code = code[3:-3]
+            return name, {"code": code}
         return name, {"code": raw_arg}
     return name, {"raw": raw_arg}
 
@@ -139,18 +156,51 @@ def load_interventions(challenge_id: str) -> list[dict]:
     return []
 
 
-def check_intervention(step: int, scripted: list[dict]) -> Intervention | None:
-    """Check if any scripted intervention fires at this step."""
-    for iv in scripted:
-        if iv.get("step") == step:
+STALL_THRESHOLD = 3  # consecutive steps with no new tool → stall
+
+
+class InterventionQueue:
+    """
+    Stall-based intervention delivery.
+
+    Interventions are ordered by tier (low first). The next intervention
+    fires when the agent stalls — defined as STALL_THRESHOLD consecutive
+    steps with no new tool called.
+
+    This is deterministic: given the same run trace, the same interventions
+    fire at the same steps.
+    """
+
+    def __init__(self, interventions: list[dict]):
+        # Sort by tier, preserve order within tier
+        self.queue = sorted(interventions, key=lambda iv: iv.get("tier", 1))
+        self.next_idx = 0
+        self.stall_count = 0
+
+    def check(self, step: int, new_tool_used: bool) -> Intervention | None:
+        """Check if a stall triggers the next intervention."""
+        if self.next_idx >= len(self.queue):
+            return None  # all interventions exhausted
+
+        if new_tool_used:
+            self.stall_count = 0
+            return None
+
+        self.stall_count += 1
+
+        if self.stall_count >= STALL_THRESHOLD:
+            iv_data = self.queue[self.next_idx]
+            self.next_idx += 1
+            self.stall_count = 0
             return Intervention(
-                id=iv.get("id", f"iv-{step:03d}"),
-                type=iv["type"],
-                payload=iv["payload"],
+                id=iv_data.get("id", f"iv-{step:03d}"),
+                type=iv_data["type"],
+                payload=iv_data["payload"],
                 step=step,
                 source="scripted",
             )
-    return None
+
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -225,9 +275,10 @@ def run(
     # Challenge dir for tool execution
     challenge_dir = str(CHALLENGES_DIR / challenge_id)
 
-    # Load and filter interventions
+    # Load and filter interventions, set up stall-based queue
     all_interventions = load_interventions(challenge_id)
-    scripted_interventions = filter_interventions(all_interventions, intervention_mode)
+    filtered = filter_interventions(all_interventions, intervention_mode)
+    iv_queue = InterventionQueue(filtered)
 
     # Set up logging
     logfile = log_path(challenge_id, variant_name, intervention_mode, run_id)
@@ -297,6 +348,14 @@ def run(
             if "Good" in verify or "success" in verify.lower() or "correct" in verify.lower():
                 state.solved = True
                 solved_this_step = True
+            else:
+                # Rejected — tell the agent clearly
+                messages.append({"role": "assistant", "content": llm_response.response})
+                messages.append({"role": "user", "content":
+                    f"SOLUTION REJECTED. The binary returned '{verify.strip()}' for input '{solution}'. "
+                    f"That is NOT a valid solution. Continue investigating."
+                })
+                continue  # skip normal history append
 
         # Auto-detect: if run_binary returned success
         if not solved_this_step and tool_output and tool_call and tool_call[0] == "run_binary":
@@ -308,17 +367,7 @@ def run(
                     solved_this_step = True
                     print(f"\n>>> AUTO-SOLVED: binary accepted input '{found_input}'")
 
-        # 6. Intervention point
-        intervention_applied = False
-        intervention_type = None
-        intervention = check_intervention(step, scripted_interventions)
-        if intervention:
-            intervention_applied = True
-            intervention_type = intervention.type
-            print(f"\n>>> Intervention fired: {intervention.type} — {intervention.payload}")
-            state = apply_intervention(state, intervention)
-
-        # 7. Compute derived metrics and log
+        # 6. Compute derived metrics (needed before intervention check)
         repeated_tool = (tool_name is not None and tool_name == last_tool_name)
         new_tool = (tool_name is not None and tool_name not in tools_used)
         action_gap = detect_action_gap(llm_response.response, tool_called)
@@ -327,6 +376,17 @@ def run(
             last_tool_name = tool_name
             tools_used.add(tool_name)
 
+        # 7. Intervention point (stall-based)
+        intervention_applied = False
+        intervention_type = None
+        intervention = iv_queue.check(step, new_tool)
+        if intervention:
+            intervention_applied = True
+            intervention_type = intervention.type
+            print(f"\n>>> Intervention fired: {intervention.type} — {intervention.payload}")
+            state = apply_intervention(state, intervention)
+
+        # 8. Log step
         record = build_step_record(
             run_id=run_id,
             challenge=challenge_id,
@@ -352,7 +412,7 @@ def run(
         if solved_this_step:
             break
 
-        # 8. Build history for next turn
+        # 9. Build history for next turn
         messages.append({"role": "assistant", "content": llm_response.response})
         if tool_output is not None:
             result_msg = f"Tool result:\n{tool_output}"
@@ -367,7 +427,7 @@ def run(
             messages.append({"role": "user", "content":
                 "You did not call a tool. You MUST call exactly one tool per turn. "
                 "Use TOOL: on its own line. Available tools: "
-                "file(), strings(), run_binary(INPUT), python_eval(CODE)"
+                "file(), strings(), disasm(), disasm(FUNCTION), run_binary(INPUT), python_eval(CODE)"
             })
 
         # Print state summary

@@ -5,3 +5,5 @@ __pycache__/
 logs/
 remote.json
 llm.config.anthropic
+llm.config.kimi
+projectprompts/

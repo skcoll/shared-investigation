@@ -1,0 +1,377 @@
+\documentclass[letterpaper]{article}
+\usepackage[submission]{aaai2026}
+\usepackage{times}
+\usepackage{helvet}
+\usepackage{courier}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{natbib}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{enumitem}
+
+\title{Shared Investigation State as a Coordination Substrate for Human--AI Reverse Engineering}
+
+\author{
+    Anonymous Author(s)
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study whether making an LLM agent's investigation state explicit and shared---rather than leaving it implicit in conversational context---improves coordination on reverse engineering (RE) tasks.
+We introduce a minimal agent framework in which an LLM iteratively analyzes Linux ELF binaries by forming hypotheses, invoking tools, and updating a structured investigation state.
+Two agent configurations share the same loop, tools, and intervention schedule, but differ in whether the investigation state is rendered back to the model each turn.
+Scripted interventions, derived from independently authored human writeups via a reproducible LLM-assisted pipeline, serve as proxies for collaborator input during early-stage experimentation.
+Preliminary results on a crackme challenge with DeepSeek R1 14B suggest that visible shared state improves tool progression, intervention uptake, and solve rate.
+The baseline agent exhibited a pronounced \emph{action gap}---describing intended analyses without executing them---and rarely converted conversational guidance into concrete next steps.
+We argue that RE is a strong testbed for studying human--AI coordination and that explicit shared state is a promising design primitive, while also outlining the ablations and validity checks needed to isolate the effect more rigorously.
+\end{abstract}
+
+\section{Introduction}
+
+Reverse engineering is an iterative, hypothesis-driven process.
+An analyst inspects a binary, forms tentative beliefs about its behavior, tests those beliefs through tools and controlled executions, revises understanding, and repeats.
+This makes RE a compelling setting for human--AI teaming: progress depends not only on local reasoning quality, but on maintaining a coherent investigative picture across turns, tools, and interventions.
+
+Recent work shows that LLMs can assist with reverse engineering subtasks such as decompilation, function naming, type recovery, and binary understanding \citep{xu2023lmpa, shang2025binmetric, shang2025binaryunderstanding, chen2025recopilot}.
+At the human-workflow level, \citet{basque2026decompiling} provide the first systematic study of human--LLM teaming in software reverse engineering, showing both substantial benefits and important failure modes.
+Yet a central design question remains underexplored: \emph{what information structure should mediate coordination between an analyst and an LLM during an ongoing investigation?}
+
+Most LLM-based assistants rely primarily on conversational history.
+As context grows, the model must infer what has already been observed, which hypotheses remain active, what actions have been tried, and which analyst suggestions are still relevant.
+In investigative tasks, this burden may be especially costly because many failures are not failures of local reasoning alone; they are failures of state maintenance, prioritization, and timely action.
+
+We study the following question:
+
+\begin{quote}
+\emph{Does making an LLM agent's investigation state explicit and shared---rather than implicit in conversation history---improve tool use, responsiveness to guidance, and progress on reverse engineering tasks?}
+\end{quote}
+
+We investigate this question with a controlled agent framework in which the model can inspect binaries, extract strings, execute the binary with candidate inputs, and maintain a structured representation of observations, hypotheses, actions, and current focus.
+The baseline and structured agents share the same tool loop and intervention schedule.
+The primary manipulation is whether the current investigation state is rendered back to the model each turn.
+
+This paper makes three contributions.
+First, we present a minimal RE agent framework designed to isolate the role of visible investigation state.
+Second, we introduce a reproducible pipeline for deriving intervention candidates from independently authored human writeups, enabling early-stage experiments before live human studies.
+Third, we report preliminary evidence that visible shared state improves coordination-relevant behavior, while also identifying key confounds and ablations required for stronger causal claims.
+
+\paragraph{Scope.}
+This paper is not a claim that LLMs can autonomously perform RE in general, nor that writeup-derived interventions are equivalent to live analysts.
+Instead, it studies one narrower question: whether an explicit shared information block improves coordination within an iterative investigative workflow.
+
+\section{Why Reverse Engineering is a Good Teaming Testbed}
+
+RE is a particularly useful domain for studying coordination structure for four reasons.
+First, it is naturally iterative and hypothesis-driven rather than single-shot.
+Second, progress is externally mediated by tools, allowing concrete measurement of whether reasoning turns into action.
+Third, analyst guidance often arrives midstream---for example, redirecting attention to a function, disproving a hypothesis, or suggesting a dynamic test.
+Fourth, important intermediate state is naturally externalizable: observations, candidate explanations, failed attempts, and planned next steps can all be represented explicitly.
+
+These properties make RE a useful setting for distinguishing between two kinds of LLM success.
+One is \emph{local competence}: producing plausible next-turn reasoning.
+The other is \emph{coordinated progress}: maintaining a usable investigative picture over time, incorporating guidance, and executing actions that reduce uncertainty.
+Our paper focuses on the latter.
+
+\section{Related Work}
+
+\paragraph{LLMs for reverse engineering and binary analysis.}
+Recent work applies LLMs to binary understanding, decompilation, and reverse engineering subtasks.
+LmPa combines LLMs with program analysis to improve decompilation-related name recovery \citep{xu2023lmpa}.
+Decompile-Eval and related decompilation studies evaluate LLMs on executable reconstruction from assembly \citep{feng2024decompile}.
+\citet{shang2025binaryunderstanding} evaluate LLMs on binary code understanding tasks such as function name recovery and code summarization, while BinMetric broadens this evaluation into a larger benchmark spanning six binary analysis tasks \citep{shang2025binmetric}.
+ReCopilot pushes toward domain-specialized binary-analysis assistants trained for multiple RE tasks \citep{chen2025recopilot}.
+Most of this literature studies task capability, model specialization, or benchmark performance rather than the coordination substrate between a human analyst and a model.
+
+\paragraph{Human--LLM teaming in software reverse engineering.}
+The closest paper to ours is \citet{basque2026decompiling}, which studies how humans and LLMs collaborate during software reverse engineering through a survey of practitioners and a fine-grained human study.
+Their work is important and directly relevant: it shows that LLMs can narrow the expertise gap for novices, accelerate some subtasks, and still introduce hallucinations and ineffective assistance.
+Our paper differs in unit of analysis and manipulation.
+Rather than evaluating whether LLM assistance helps humans during RE in general, we isolate one coordination mechanism: whether an explicit shared investigation state improves multi-turn progress and intervention uptake inside the agent loop.
+
+\paragraph{LLM agents for cyber tasks.}
+A broader cybersecurity-agent literature studies autonomous or semi-autonomous solving of CTF and offensive-security tasks.
+Examples include agents for autonomous web exploitation \citep{fang2024hackwebsites, fang2024oneday}, post-breach attack automation \citep{xu2024autoattacker}, CTF-solving systems such as HackSynth \citep{muzsai2024hacksynth}, EnIGMA \citep{abramovich2024enigma}, and multi-agent planner--executor approaches such as D-CIPHER \citep{udeshi2025dcipher}.
+These papers are useful for framing tool use, planning, and environmental interaction, but they typically optimize autonomous task completion rather than shared investigative state with a human collaborator.
+
+\paragraph{Structured reasoning and mixed-initiative interaction.}
+Our design also draws on work showing that externalized intermediate structure can improve model performance, including chain-of-thought prompting \citep{wei2022chain}, ReAct \citep{yao2023react}, and Reflexion \citep{shinn2023reflexion}.
+From the human--AI side, our framing is informed by common ground and joint activity \citep{clark1996using, johnson2014coactive}, adjustable autonomy \citep{bradshaw2004making}, and mixed-initiative interaction \citep{horvitz1999principles}.
+We treat the investigation state as a coordination artifact: a shared object that both analyst and model can inspect and modify.
+
+\section{Research Questions and Hypotheses}
+
+We organize the current study around four hypotheses.
+
+\begin{itemize}[leftmargin=1.2em]
+    \item \textbf{H1: Solve rate.} Visible shared state increases challenge solve rate under a fixed step budget.
+    \item \textbf{H2: Intervention uptake.} Visible shared state increases the probability that an intervention changes subsequent investigation behavior within a short horizon.
+    \item \textbf{H3: Action gap.} Visible shared state decreases the frequency of narrative-only reasoning turns that do not produce new tool use or concrete progress.
+    \item \textbf{H4: Tool progression.} Visible shared state improves purposeful progression across tools rather than repeated reuse of the same tool without state change.
+\end{itemize}
+
+These hypotheses focus on coordination outcomes rather than raw benchmark capability.
+Even if stronger models eventually reduce performance gaps, these measures remain useful for understanding how collaboration structure shapes investigative behavior.
+
+\section{System Design}
+
+\subsection{Agent Loop}
+
+Both configurations execute the same loop (Algorithm~\ref{alg:loop}).
+At each step, the agent receives a prompt, generates a response, and the system parses the response for: (1)~a tool call, (2)~a state update, and (3)~a solution declaration.
+If a tool is called, the result is returned as the next message.
+Interventions are checked after each step using a stall-based trigger.
+
+\begin{figure}[t]
+\centering
+\small
+\begin{tabular}{l}
+\toprule
+\textbf{Algorithm 1:} Agent Investigation Loop \\
+\midrule
+\textbf{Input:} challenge $C$, config (state visibility, intervention mode) \\
+\textbf{Output:} InvestigationState $S$ \\
+\\
+$S \leftarrow$ \textsc{InitState}($C$) \\
+$H \leftarrow []$ \hfill \textit{// message history} \\
+$Q \leftarrow$ \textsc{LoadInterventions}($C$, mode) \\
+\\
+\textbf{for} step $= 1$ \textbf{to} max\_steps \textbf{do} \\
+\quad $P \leftarrow$ \textsc{BuildPrompt}($S$, $H$, state\_visible) \\
+\quad $R \leftarrow$ \textsc{LLM}($P$) \\
+\quad \textbf{if} \textsc{HasToolCall}($R$) \textbf{then} \\
+\quad\quad $output \leftarrow$ \textsc{Execute}(\textsc{ParseTool}($R$)) \\
+\quad\quad $S \leftarrow$ \textsc{RecordAction}($S$, tool, output) \\
+\quad \textbf{if} \textsc{HasStateUpdate}($R$) \textbf{then} \\
+\quad\quad $S \leftarrow$ \textsc{ApplyStateUpdate}($S$, \textsc{ParseState}($R$)) \\
+\quad \textbf{if} \textsc{HasSolution}($R$) or \textsc{BinaryAccepted}(output) \textbf{then} \\
+\quad\quad \textbf{return} $S$ with solved $=$ true \\
+\quad $iv \leftarrow Q$.\textsc{CheckStall}(step, new\_tool\_used) \\
+\quad \textbf{if} $iv \neq$ null \textbf{then} \\
+\quad\quad $S \leftarrow$ \textsc{ApplyIntervention}($S$, $iv$) \\
+\quad $H \leftarrow H + [R, output]$ \\
+\textbf{return} $S$ \\
+\bottomrule
+\end{tabular}
+\caption{Shared agent loop. Conditions differ in prompt construction and, in planned ablations, in whether state updates are required.}
+\label{alg:loop}
+\end{figure}
+
+\subsection{Experimental Conditions}
+
+Our current design separates \emph{state visibility} from \emph{intervention strength}.
+Table~\ref{tab:conditions} shows the main conditions, and Table~\ref{tab:ablations} lists planned ablations needed to isolate the treatment more cleanly.
+
+\begin{table}[t]
+\centering
+\caption{Main experimental conditions.}
+\label{tab:conditions}
+\begin{tabular}{clcc}
+\toprule
+ & Condition & State Visible & Interventions \\
+\midrule
+A & Baseline & No & None \\
+B & Baseline & No & Light \\
+C & Structured & Yes & None \\
+D & Structured & Yes & Light \\
+E & Structured & Yes & Strong \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Planned ablations to reduce prompt-level confounds.}
+\label{tab:ablations}
+\begin{tabular}{p{0.28\linewidth}p{0.62\linewidth}}
+\toprule
+Condition & Purpose \\
+\midrule
+Visible state, no required update & Tests whether simply showing state helps, without forced bookkeeping. \\
+No visible state, required structured update & Tests whether output discipline alone explains gains. \\
+Rolling textual summary baseline & Controls for extra context compression without explicit schema. \\
+Visible state with analyst-only updates & Tests whether shared read access matters even when the model does not maintain the state. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{State visibility.}
+In baseline conditions, the model receives a system prompt and conversation history only.
+The \texttt{InvestigationState} object is maintained by the framework for logging and evaluation but is not shown to the model.
+In structured conditions, the current state is rendered as human-readable text at every turn.
+In the current implementation, the model is also instructed to emit a structured update block; this is a known confound and motivates the ablations above.
+
+\paragraph{Intervention strength.}
+Light interventions provide directional guidance such as \texttt{add\_hypothesis}, \texttt{reject\_hypothesis}, or \texttt{mark\_observation\_important}.
+Stronger interventions may reprioritize next steps or suggest a concrete action class.
+Interventions are delivered through a stall trigger after $k$ consecutive steps with no new tool use.
+
+\subsection{Investigation State}
+
+The shared state contains five core fields:
+\begin{itemize}[leftmargin=1.2em]
+    \item \textbf{Observations:} grounded facts discovered through tools, each with source attribution.
+    \item \textbf{Hypotheses:} testable claims with status, confidence, and origin.
+    \item \textbf{Actions:} prior tool calls and their outcomes.
+    \item \textbf{Current focus:} the subproblem currently being pursued.
+    \item \textbf{Current understanding:} a free-text synthesis of the present investigative picture.
+\end{itemize}
+
+The design goal is not to fully formalize RE, but to expose the minimum structure needed for coordination across turns.
+
+\subsection{Tools}
+
+The current agent has access to four tools: \texttt{file()}, \texttt{strings()}, \texttt{run\_binary(input)}, and \texttt{python\_eval(code)}.
+Static tools execute locally; \texttt{run\_binary} executes x86-64 Linux ELF binaries in a controlled containerized environment with emulation support for ARM hosts.
+Tool calls are emitted in natural language rather than a strict function-calling API, reflecting current limitations of smaller open-weight models.
+
+\section{Intervention Derivation}
+
+\subsection{Human Reasoning Proxies}
+
+Early experiments use independently authored public writeups as proxies for analyst guidance.
+For each challenge, we collect multiple writeups and exclude code-only dumps or very short descriptions.
+These writeups are then converted into structured traces through an LLM-assisted pipeline.
+
+\subsection{Stage 1: Step Extraction}
+
+Each writeup is converted into typed steps such as \emph{observation}, \emph{hypothesis}, \emph{action}, and \emph{result}.
+Extraction is performed with a constrained prompt requiring textual evidence for each step.
+A normalization pass merges duplicates and removes vague or non-actionable statements.
+
+\subsection{Stage 2: Intervention Synthesis}
+
+The extracted traces are aggregated to identify recurring insights across writeups.
+Consensus observations become candidate interventions.
+Current intervention types include directional prompts (e.g., add or reject a hypothesis) and stronger action-shaping prompts (e.g., reprioritize next steps).
+
+\paragraph{Human verification.}
+All LLM-generated extraction artifacts are manually reviewed to reduce hallucinated steps, miscategorizations, and solution leakage.
+This verification is especially important because the intervention language may otherwise unintentionally encode answer structure.
+
+\section{Experimental Setup}
+
+\subsection{Challenge}
+
+We report preliminary results on \texttt{yurisimplekeygen}, a beginner-level crackme from crackmes.one.
+The binary is a 64-bit x86-64 ELF program that validates a 16-character serial key.
+Seven independent writeups were collected and processed through the intervention pipeline.
+
+\subsection{Model}
+
+All preliminary experiments use DeepSeek R1 14B \citep{deepseekai2025deepseekr1}, served via Ollama.
+The model was chosen as a practical interactive baseline rather than as a frontier capability ceiling.
+Its explicit reasoning traces are logged separately for later qualitative analysis, but our primary metrics rely on externally observable behavior rather than the content of hidden reasoning.
+
+\subsection{Protocol}
+
+Each current condition is run three times with a 15-step budget and a stall threshold of $k=3$.
+All runs are logged as structured JSONL traces capturing prompts, responses, tool use, state mutations, interventions, and outcomes.
+
+\subsection{Evaluation Metrics}
+
+We evaluate both task outcome and coordination behavior.
+Table~\ref{tab:metrics} lists the primary metrics used now and in the next experimental phase.
+
+\begin{table}[t]
+\centering
+\caption{Primary evaluation metrics.}
+\label{tab:metrics}
+\begin{tabular}{p{0.28\linewidth}p{0.62\linewidth}}
+\toprule
+Metric & Definition \\
+\midrule
+Solve rate & Fraction of runs that recover an accepted solution within budget. \\
+Intervention uptake & Whether behavior changes within the next 1--2 turns in a way consistent with the intervention. \\
+Action gap rate & Fraction of turns that describe intended next steps without producing new tool use or grounded state change. \\
+Tool progression & Number and order of distinct tools used, especially transitions from static inspection to dynamic testing. \\
+Dead-end recovery & Whether the agent exits repeated unproductive loops after intervention. \\
+Grounded hypothesis update & Whether added or revised hypotheses are later supported or refuted by tool evidence. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Preliminary Results}
+
+\begin{table}[t]
+\centering
+\caption{Preliminary results on \texttt{yurisimplekeygen} (3 runs per condition, 15-step budget). Conditions B and D shown: both receive light interventions.}
+\label{tab:results}
+\begin{tabular}{lcccc}
+\toprule
+ & Solve & Tool & Unique & \texttt{run\_binary} \\
+Condition & Rate & Calls & Tools & Calls \\
+\midrule
+B: Baseline + Light & 0/3 & 4.3 & 1.3 & 0.0 \\
+D: Structured + Light & 2/3 & 3.0 & 3.3 & 1.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three preliminary patterns emerge.
+
+\paragraph{Structured state improves tool progression.}
+The structured agent followed more purposeful arcs such as \texttt{file} $\rightarrow$ \texttt{strings} $\rightarrow$ \texttt{run\_binary}.
+The baseline agent often reused \texttt{file()} without progressing to dynamic testing.
+Most notably, baseline runs never called \texttt{run\_binary}, preventing direct hypothesis testing against the executable.
+
+\paragraph{Interventions appear more actionable when state is visible.}
+Both conditions received the same intervention content.
+In structured runs, interventions were more often followed by tool changes or hypothesis revisions in the subsequent 1--2 turns.
+In baseline runs, the same content frequently vanished into the conversational stream without producing observable behavioral change.
+
+\paragraph{The baseline showed a strong action gap.}
+Baseline responses were substantially longer and often narrated what the model intended to do rather than doing it.
+We use \emph{action gap} to describe this failure mode: descriptive reasoning that does not produce grounded investigative progress.
+The visible shared state appears to reduce this tendency by keeping prior actions, current focus, and open hypotheses salient.
+
+\section{Threats to Validity}
+
+\paragraph{Prompt confound.}
+The current structured condition differs from the baseline in two ways: it exposes the state and it asks the model to emit structured updates.
+Accordingly, current results should not yet be interpreted as a clean estimate of the effect of state visibility alone.
+
+\paragraph{Intervention leakage.}
+Writeup-derived interventions may encode solution structure more strongly than intended.
+Even when valid, they may align especially well with the schema of the shared state, potentially advantaging structured conditions.
+
+\paragraph{Limited task diversity.}
+Current findings are based on a single beginner-level crackme with a small number of runs.
+This is useful for discovering failure modes but insufficient for broad generalization.
+
+\paragraph{Model dependence.}
+DeepSeek R1 14B is a practical but imperfect baseline.
+Some observed failures may reflect small-model instruction-following limitations rather than universal coordination effects.
+The next phase should test whether the gap persists for larger open and frontier models.
+
+\paragraph{Proxy collaborator limitation.}
+Writeup-derived interventions are a tractable stand-in for human guidance, but they do not capture the adaptivity, ambiguity, or timing of live analyst collaboration.
+A later human-in-the-loop study is required to validate ecological relevance.
+
+\section{Discussion}
+
+The most important claim supported by the current draft is not that shared state is universally necessary, but that it is a promising coordination primitive worth isolating experimentally.
+This distinction matters.
+The preliminary evidence suggests that some RE failures arise because the model does not maintain or act on the right shared picture of the task, not merely because it lacks local knowledge.
+That possibility is theoretically interesting and practically important for the design of analyst-facing AI systems.
+
+The paper also contributes value by sitting between two literatures that do not yet fully meet.
+On one side, RE papers increasingly study what LLMs can do on binary tasks.
+On the other, human--AI and cyber-agent papers study assistance, autonomy, and tool use.
+Your framing asks a narrower but underexplored question: how should information be structured between analyst and model so that collaboration remains coherent over time?
+
+\section{Conclusion and Next Steps}
+
+We presented a framework for testing whether an explicit shared investigation state improves coordination on RE tasks.
+Preliminary results suggest gains in tool progression, intervention uptake, and solve rate, alongside a reduction in the action gap.
+At the same time, the current draft should treat these findings as directional rather than definitive because the main manipulation is not yet perfectly isolated.
+
+The next phase of the work should prioritize four steps: (1) run the planned ablations in Table~\ref{tab:ablations}; (2) expand to additional crackmes with differing solution structure and difficulty; (3) test larger and frontier models to determine whether the effect persists or narrows; and (4) replace scripted interventions with live analyst interactions.
+If the effect survives these tests, shared investigation state would represent a meaningful design contribution for human--AI reverse engineering systems.
+
+\bibliography{updated_references}
+
+\end{document}

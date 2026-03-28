@@ -139,6 +139,8 @@ Your goal is to understand the binary's validation logic and produce a valid inp
 
 - file()              : show file type info
 - strings()           : extract printable strings from the binary
+- disasm()            : disassemble the full binary (Intel syntax)
+- disasm(FUNCTION)    : disassemble a specific function (e.g., disasm(checkSerial))
 - run_binary(INPUT)   : run the binary with INPUT as its argument
 - python_eval(CODE)   : run a Python snippet
 
@@ -198,17 +200,15 @@ def build_prompt(state: InvestigationState, messages: list[dict]) -> list[dict]:
             f"{state_block}\n\n"
             f"---\n"
             f"{challenge_text}\n\n"
-            f"Begin your investigation. Start by calling file() or strings() to learn about the binary.\n\n"
-            f"Remember: you MUST call exactly one tool per response using TOOL: format. "
-            f"Example of a correct response:\n\n"
-            f"Let me start by examining what type of binary this is.\n\n"
-            f"TOOL: file()\n\n"
-            f"```json\n"
-            f'{{"new_observations": [], '
-            f'"hypothesis_updates": [], '
-            f'"current_focus": "determine binary type and architecture", '
-            f'"current_understanding": "starting investigation"}}\n'
-            f"```"
+            f"Begin your investigation.\n\n"
+            f"You MUST call exactly one tool per response using TOOL: on its own line.\n\n"
+            f"A typical investigation follows this progression:\n"
+            f"  1. TOOL: file()           — identify binary type\n"
+            f"  2. TOOL: strings()        — find function names and messages\n"
+            f"  3. TOOL: disasm(main)     — read main function logic\n"
+            f"  4. TOOL: disasm(funcName) — read validation function\n"
+            f"  5. TOOL: run_binary(test) — test a hypothesis\n\n"
+            f"Start now with your first tool call and a ```json state update."
         )
         return [{"role": "user", "content": content}]
 

@@ -87,9 +87,14 @@ def _openai_compat_call(
     completion = client.chat.completions.create(**call_kwargs)
     message = completion.choices[0].message
 
-    # Parse thinking out of content
+    # Parse thinking: check reasoning_content field (Kimi K2), then <think> tags
     content = message.content or ""
-    thinking, response = _parse_think_tags(content)
+    reasoning = getattr(message, "reasoning_content", None) or ""
+    if reasoning:
+        thinking = reasoning
+        response = content
+    else:
+        thinking, response = _parse_think_tags(content)
 
     # Extract tool call if present
     tool_call = None

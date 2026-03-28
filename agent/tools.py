@@ -69,6 +69,40 @@ def run_binary(challenges_root: str, binary_path: str, input_arg: str) -> str:
     return _run(cmd)
 
 
+def disasm(path: str, function: str = "") -> str:
+    """Disassemble a binary with objdump. Optionally filter to a specific function."""
+    if function:
+        # Disassemble full binary, grep for the function section
+        result = subprocess.run(
+            ["objdump", "-d", "-M", "intel", path],
+            capture_output=True, text=True, timeout=TIMEOUT,
+        )
+        output = result.stdout
+        # Extract just the requested function
+        lines = output.split("\n")
+        capturing = False
+        captured = []
+        for line in lines:
+            if f"<{function}>:" in line:
+                capturing = True
+            elif capturing and line and not line.startswith(" ") and ":" in line and "<" in line:
+                # Hit the next function header
+                break
+            if capturing:
+                captured.append(line)
+        if captured:
+            output = "\n".join(captured)
+        else:
+            output = f"Function '{function}' not found. Available functions:\n"
+            output += "\n".join(l for l in lines if l.strip().endswith(">:"))[:2000]
+        if len(output) > 4000:
+            output = output[:4000] + "\n[...truncated]"
+        return output.strip()
+    else:
+        # Full disassembly, truncated
+        return _run(["objdump", "-d", "-M", "intel", path])
+
+
 def python_eval(code: str) -> str:
     """Execute a Python snippet and return the result."""
     return _run(["python3", "-c", code])
@@ -115,15 +149,26 @@ def execute(tool_name: str, args: dict, challenge_dir: str) -> str:
         path = _resolve_local(args.get("path", args.get("file", "")))
         return strings(path)
 
+    if tool_name == "disasm":
+        path = _resolve_local(args.get("path", args.get("file", "")))
+        function = args.get("function", "")
+        return disasm(path, function)
+
     if tool_name == "python_eval":
         code = args.get("code", "")
+        if not code:
+            return "[error] python_eval requires code. Usage: TOOL: python_eval(print('hello'))"
         return python_eval(code)
 
     # --- Docker tool: run_binary ---
 
     if tool_name == "run_binary":
         input_arg = args.get("input", args.get("args", ""))
+        if not input_arg:
+            return "[error] run_binary requires input. Usage: TOOL: run_binary(your_test_input_here)"
         binary = str(Path(_resolve_local(args.get("binary", ""))).resolve())
         return run_binary(challenges_root, binary, input_arg)
 
-    return f"[error] unknown tool: {tool_name}"
+    return (f"[error] unknown tool: {tool_name}. "
+            f"Available tools: file(), strings(), disasm(), disasm(FUNCTION), "
+            f"run_binary(INPUT), python_eval(CODE)")
