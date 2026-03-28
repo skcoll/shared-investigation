@@ -7,3 +7,4 @@ remote.json
 llm.config.anthropic
 llm.config.kimi
 projectprompts/
+paper/
