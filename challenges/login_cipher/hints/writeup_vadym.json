@@ -1,0 +1,36 @@
+{
+  "source": "Vadym (write-up.txt)",
+  "tool": "Cutter (radare2 GUI)",
+  "steps": [
+    {
+      "type": "action",
+      "content": "Used Cutter to decompile the binary and identify obfuscated strings",
+      "evidence": "I used https://github.com/radareorg/cutter to decompile \"login\""
+    },
+    {
+      "type": "observation",
+      "content": "Identified three encoded strings at addresses 0x2004, 0x2014, and 0x2033",
+      "evidence": "I saw several strings: str.Gtu.__uj_fq_p 0x2004, str.Lszl 0x2014, str.fhz4yhx__g_5 0x2033"
+    },
+    {
+      "type": "hypothesis",
+      "content": "By counting symbols and comparing encoded/decoded strings, the cipher uses a constant repeating difference pattern",
+      "evidence": "By counting symbols, I found that... During searching of symbols dependencies, I found that cipher is constant"
+    },
+    {
+      "type": "observation",
+      "content": "The difference pattern between encoded and decoded characters is: 3,5,7,7,9,7,5,9,7,3,9,1 (repeating)",
+      "evidence": "Difference between symbols: 35779759   73917731555355         357797597391773"
+    },
+    {
+      "type": "action",
+      "content": "Applied the difference pattern to decode the password string character by character",
+      "evidence": "'f' - 3 = 'c', 'h' - 5 = 'c', 'z' - 7 = 's', '4' - 7 = '-', ..."
+    },
+    {
+      "type": "result",
+      "content": "Decoded password is ccs-passwd44, verified by running the binary",
+      "evidence": "./login ... Insert your password: ccs-passwd44 / Correct!"
+    }
+  ]
+}

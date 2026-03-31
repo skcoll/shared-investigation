@@ -1,0 +1,56 @@
+{
+  "source": "Silva97 (login-cipher_Silva97.txt)",
+  "tool": "radare2/disassembler",
+  "steps": [
+    {
+      "type": "action",
+      "content": "Analyzed fcn.00001348 which takes a char* and int argument",
+      "evidence": "We start by analyzing a commonly used procedure fcn.00001348(char*, int)"
+    },
+    {
+      "type": "observation",
+      "content": "fcn.00001348 applies a decoder function (fcn.00001218) on a string then prints it via puts or fputs depending on arg2",
+      "evidence": "fcn.00001348 applies fcn.00001218 (likely a decoder of sorts) on a string S... arg2 = 1 displays S as a string using puts(arg1) | arg2 = 0 displays S as string using fputs(arg1, stdout)"
+    },
+    {
+      "type": "action",
+      "content": "Reverse engineered fcn.00001218 instruction by instruction to understand the decoding loop",
+      "evidence": "We move on to fcn.00001218, which is a computational loop described as follow"
+    },
+    {
+      "type": "observation",
+      "content": "The decoder initializes a value to 1969 (0x7b1) and iterates over each character",
+      "evidence": "var_18h = var_8h = starting character of arg1, var_ch = 1969"
+    },
+    {
+      "type": "observation",
+      "content": "Each iteration: value = (value * 7) & 0xffff, then character -= value % 10",
+      "evidence": "var_ch = (var_ch * 7) & 0xffff... *arg1 -= value % 10"
+    },
+    {
+      "type": "hypothesis",
+      "content": "The multiply-by-magic-number pattern (0x66666667) implements integer division by 10 (modulo operation)",
+      "evidence": "this seems like a possible suggestion... https://stackoverflow.com/questions/2033210/c-fast-division-mod-by-10x"
+    },
+    {
+      "type": "action",
+      "content": "Reconstructed pseudo-C and Python implementations of the decoder",
+      "evidence": "a pseudo-C code possibly mimicking the fcn.00001218 is as follows... The corresponding python code..."
+    },
+    {
+      "type": "result",
+      "content": "Decoded all encoded strings: 'Gtu...' = 'Don't patch it!', 'fhz4yhx|~g=5' = 'ccs-passwd44', 'Ftyynjy*' = 'Correct!', 'Zwvup(' = 'Wrong!'",
+      "evidence": "str.Gtu.__uj_fq_p 0x2004 = Don't patch it! ... str.fhz4yhx__g_5 0x2033 = ccs-passwd44"
+    },
+    {
+      "type": "observation",
+      "content": "main compares user input against the decoded password via fcn.000013e3, requiring return value 0",
+      "evidence": "As long as fcn.00013e3(USERINPUT, \"ccs-passwd44\") returns 0, we are good"
+    },
+    {
+      "type": "result",
+      "content": "Password is ccs-passwd44",
+      "evidence": "Conclusion: password is \"ccs-passwd44\""
+    }
+  ]
+}

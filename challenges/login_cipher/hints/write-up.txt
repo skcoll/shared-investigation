@@ -1,0 +1,43 @@
+Hello, Silva97.
+
+I used https://github.com/radareorg/cutter to decompile "login"
+
+I saw several strings
+
+0x000012bd      lea     rdi, str.Gtu.__uj_fq_p ; 0x2004 ; "Gtu.}'uj{fq!p{$"
+0x000012ce      lea     rdi, str.Lszl ; 0x2014 ; "Lszl{{%\x82vx{!whvt|twg?%"
+0x000012f6      lea     rsi, str.fhz4yhx__g_5 ; 0x2033 ; "fhz4yhx|~g=5"
+
+By counting symbols, I found that:
+ "Gtu.}'uj{fq!p{$" is "Don't patch it!"
+ "Lszl{{%\x82vx{!whvt|twg?%" is "Insert your password: "
+ "fhz4yhx|~g=5" is password
+
+During searching of symbols dependencies, I found that cipher is constant.
+
+Origin symbols:             Insert y   our password:          Don't patch it!
+Difference between symbols: 35779759   73917731555355         357797597391773
+Encrypted symbols:          Lszl{{%\x82vx{!whvt|twg?%         Gtu.}'uj{fq!p{$
+
+
+I encrypted password by formula: encrypted-difference=symbols
+'f' - 3 = 'c'
+'h' - 5 = 'c'
+'z' - 7 = 's'
+'4' - 7 = '-'
+'y' - 9 = 'p'
+'h' - 7 = 'a'
+'x' - 5 = 's'
+'|' - 9 = 's'
+'~' - 7 = 'w'
+'g' - 3 = 'd'
+'=' - 9 = '4'
+'5' - 1 = '4'
+
+./login 
+Don't patch it!
+Insert your password: ccs-passwd44
+Correct!
+
+Thanks for this crackme.
+Vadym.

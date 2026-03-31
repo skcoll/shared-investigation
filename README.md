@@ -88,21 +88,19 @@ The shared state is a Pydantic model (`InvestigationState`) containing:
 
 The `origin` field on hypotheses is the primary mechanism for measuring intervention uptake.
 
-## Models Tested
+## Models
 
-| Model | Type | Thinking Traces | Provider |
-|-------|------|----------------|----------|
-| **DeepSeek R1 14B** | Open-weight, 14B params | Yes (native `<think>` tags) | Ollama (local + school server) |
-| **Qwen3 8B** | Open-weight, 8B params | Yes (native `<think>` tags) | Ollama (school server) |
-| **Kimi K2 Thinking** | Frontier, MoE ~1T total | Yes (`reasoning_content` field) | Moonshot API |
+We use **DeepSeek R1** at two scales plus a frontier reference:
 
-The LLM client (`llm_client.py`) supports four backends:
-- **Ollama** — native `/api/chat` endpoint, preserves thinking traces from DeepSeek R1 / Qwen3
-- **vLLM** — OpenAI-compatible API, also used for Kimi K2 (Moonshot's API is OpenAI-compatible)
-- **Anthropic** — Claude API with extended thinking support
-- **Stub** — hardcoded responses for testing without any API
+| Model | Params | Role | Provider |
+|-------|--------|------|----------|
+| **DeepSeek R1 14B** | 14B | Small-scale — tests whether structured state changes behavior when the model cannot independently solve | Ollama (school GPU server) |
+| **DeepSeek R1 70B** | 70B | Large-scale — tests whether the structured state advantage persists with stronger reasoning | Ollama (school GPU server) |
+| **Kimi K2 Thinking** | ~1T MoE | Frontier ceiling — tests whether the effect persists when model capability is no longer the bottleneck | Moonshot API |
 
-Model configuration is specified in JSON files at the project root. API keys support `"env:VAR_NAME"` syntax.
+**Why DeepSeek R1.** (1) Native thinking traces — the `<think>` block is trained into the model via reinforcement learning, providing explicit chain-of-thought data without prompt engineering. (2) Same architecture at multiple scales — 14B and 70B differ only in parameter count, isolating scale as a variable. (3) Open-weight and reproducible — freely available via Ollama, enabling full reproducibility without API costs. (4) Reasoning-optimized — trained with RL specifically for reasoning tasks, making it well-suited to investigative RE.
+
+**LLM client** (`llm_client.py`) supports four backends: Ollama (native API, preserves thinking traces), vLLM (OpenAI-compatible), Moonshot/Kimi (OpenAI-compatible with `reasoning_content`), Anthropic (extended thinking), and a stub for testing. Model configuration is specified in JSON files. API keys support `"env:VAR_NAME"` syntax.
 
 ## Logging and Metrics
 
@@ -124,7 +122,7 @@ Each step produces a structured JSONL record (18 fields) capturing:
 
 ## Results
 
-### DeepSeek R1 14B (yurisimplekeygen, 3 runs/condition, 15-step budget)
+### Completed: DeepSeek R1 14B (yurisimplekeygen, 3 runs/condition, 15-step budget)
 
 | Condition | Solve Rate | Avg Tools | Unique Tools | Action Gap |
 |-----------|-----------|-----------|--------------|------------|
@@ -136,7 +134,7 @@ Each step produces a structured JSONL record (18 fields) capturing:
 
 No condition solved, but structured state reduced action gap from ~69% to ~24% and tripled tool diversity.
 
-### Kimi K2 (yurisimplekeygen, 3 runs/condition, 20-step budget)
+### Completed: Kimi K2 Frontier Reference (yurisimplekeygen, 3 runs/condition, 20-step budget)
 
 | Condition | Solve Rate | Avg Steps | Avg Tools | Unique Tools | Action Gap |
 |-----------|-----------|-----------|-----------|--------------|------------|
@@ -146,19 +144,21 @@ No condition solved, but structured state reduced action gap from ~69% to ~24% a
 | D: structured/light | 3/3 | 12.7 | 12.0 | 5.3 | 0.022 |
 | E: structured/strong | 2/3 | 11.0 | 12.0 | 5.7 | 0.042 |
 
-All conditions solve, but structured state still reduces action gap by ~65%. Structured agent is more thorough (more disasm and run_binary calls) but slightly slower. Interventions help baseline but not structured — they serve overlapping functions.
+All conditions solve, but structured state still reduces action gap by ~65%.
 
-### Cross-Model Comparison
+### Pending: DeepSeek R1 70B (yurisimplekeygen)
 
-| | DeepSeek R1 14B | Kimi K2 |
-|---|---|---|
-| Solve rate (baseline) | 0/6 | 6/6 |
-| Solve rate (structured) | 0/9 | 8/9 |
-| Action gap (baseline) | 0.689 | 0.114 |
-| Action gap (structured) | 0.245 | 0.037 |
-| Action gap reduction | 64% | 68% |
+The critical middle data point. Same architecture as 14B at 5× scale — will show whether structured state's behavioral advantages translate to solve rate differences with a more capable open-weight model.
 
-The ~65% action gap reduction from structured state is consistent across model scales.
+### Cross-Model Summary (to date)
+
+| | DeepSeek R1 14B | DeepSeek R1 70B | Kimi K2 |
+|---|---|---|---|
+| Solve rate (baseline) | 0/6 | *pending* | 6/6 |
+| Solve rate (structured) | 0/9 | *pending* | 8/9 |
+| Action gap (baseline) | 0.689 | *pending* | 0.114 |
+| Action gap (structured) | 0.245 | *pending* | 0.037 |
+| Action gap reduction | 64% | *pending* | 68% |
 
 See `results/` for full analysis files.
 
@@ -232,10 +232,10 @@ bash run_full_experiment.sh
 
 ## Work Remaining
 
-- **Harder challenges**: yurisimplekeygen is too easy for frontier models (100% baseline solve). Need difficulty 3-4 crackmes where baseline fails.
-- **More runs**: increase to 10 runs/condition for statistical power.
-- **Qwen3 8B experiment**: complete the middle data point for three-model comparison.
-- **Investigation milestones**: track intermediate progress (discovered function name, identified length, identified pattern) beyond binary solve/fail.
+- **DeepSeek R1 70B experiment**: full factorial on yurisimplekeygen — the critical scaling data point (in progress)
+- **Harder challenges**: yurisimplekeygen (difficulty 1.5) is too easy for frontier models. Need 2-3 crackmes at difficulty 3-4 where baseline fails but structured may succeed.
+- **More runs**: increase to 10 runs/condition for statistical power
+- **Investigation milestones**: track intermediate progress (discovered function name, identified length, identified pattern) beyond binary solve/fail
 
 ## License
 

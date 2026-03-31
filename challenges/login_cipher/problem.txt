@@ -1,0 +1,39 @@
+Author:
+Silva97
+
+Language:
+C/C++
+
+Upload:
+2019-10-24 00:26
+
+Platform:
+Unix/linux etc.
+
+Difficulty:
+3.0 Rate!
+
+Quality:
+4.0 Rate!
+
+Arch:
+x86-64
+
+Downloads:
+103
+
+Size:
+13.98 KB
+
+Writeups:
+5
+
+Comments:
+8
+
+Description
+
+ELF64 program. You have to insert the correct password.
+
+To submit your solution, explain what you did to get the password or write a script to decrypt it.
+Don't patch! Your hand go break if you do it.

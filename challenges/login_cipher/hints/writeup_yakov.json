@@ -1,0 +1,41 @@
+{
+  "source": "Yakov (login-cipher.txt)",
+  "tool": "radare2",
+  "steps": [
+    {
+      "type": "action",
+      "content": "Disassembled main function to identify program structure",
+      "evidence": "I can recreate my steps approximately, by starting with the disassembly of the main function"
+    },
+    {
+      "type": "observation",
+      "content": "main calls a function at 0x1348 with obfuscated string arguments",
+      "evidence": "I disassembled main and found that the calls to the function at 0x1348 take string arguments that appear obfuscated"
+    },
+    {
+      "type": "observation",
+      "content": "There is a decoding function at 0x1218 that decodes strings before printing",
+      "evidence": "I examined the code in that function and found where the strings are decoded before being printed (function at 0x1218)"
+    },
+    {
+      "type": "hypothesis",
+      "content": "Decoding all obfuscated strings will reveal the password",
+      "evidence": "The solution was a matter of decoding all of the strings, until finding one that is the correct password"
+    },
+    {
+      "type": "action",
+      "content": "Set breakpoint at 0x12c4 and redirected rdi to the encoded password string at 0x2033",
+      "evidence": "I changed the value of rdi from 0x2004 (\"Gtu.}'uj{fq!p{$\") to 0x2033 (\"fhz4yhx|~g=5\")"
+    },
+    {
+      "type": "result",
+      "content": "The decoder function printed the decoded password: ccs-passwd44",
+      "evidence": "After continuing execution, the program printed the password instead of the warning... ccs-passwd44"
+    },
+    {
+      "type": "action",
+      "content": "Verified the password by running the program normally",
+      "evidence": "Insert your password: ccs-passwd44 / Correct!"
+    }
+  ]
+}

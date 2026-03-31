@@ -1,0 +1,41 @@
+[
+  {
+    "id": "iv-001",
+    "tier": 1,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The binary's visible strings are not plaintext — they are encoded and decoded at runtime by an internal function before being printed or compared.",
+      "confidence": "high"
+    },
+    "derivation": {
+      "supporting_writeups": ["Yakov", "Silva97", "Anonymous", "Vadym"],
+      "consensus": "4/4 writeups identify that strings in the binary are obfuscated and decoded at runtime"
+    }
+  },
+  {
+    "id": "iv-002",
+    "tier": 1,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The password the program expects is not stored in plaintext. It is one of the encoded strings passed to the decoder function. Identifying which encoded string is the password (vs. UI messages) is key.",
+      "confidence": "high"
+    },
+    "derivation": {
+      "supporting_writeups": ["Yakov", "Silva97", "Anonymous", "Vadym"],
+      "consensus": "4/4 writeups identify 'fhz4yhx|~g=5' as the encoded password string, distinct from UI message strings"
+    }
+  },
+  {
+    "id": "iv-003",
+    "tier": 2,
+    "type": "add_hypothesis",
+    "payload": {
+      "claim": "The decoding function operates character-by-character using a deterministic numeric sequence. The sequence is seeded with a constant initial value and updated each iteration via a fixed arithmetic transformation. Each character is shifted by a value derived from the current sequence state.",
+      "confidence": "high"
+    },
+    "derivation": {
+      "supporting_writeups": ["Silva97", "Anonymous", "Vadym"],
+      "consensus": "3/4 writeups reconstruct the cipher algorithm: seed=0x7b1, multiply-and-mask update, subtract (value%10) per character"
+    }
+  }
+]

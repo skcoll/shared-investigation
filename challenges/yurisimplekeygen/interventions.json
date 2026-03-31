@@ -4,8 +4,12 @@
     "tier": 1,
     "type": "add_hypothesis",
     "payload": {
-      "claim": "The strings output shows a function called checkSerial. Try disasm(checkSerial) to read its assembly code — the validation logic is likely there, not in main.",
+      "claim": "The binary contains a dedicated validation function called checkSerial that is separate from main. The validation logic is in checkSerial, not in the main function.",
       "confidence": "high"
+    },
+    "derivation": {
+      "supporting_writeups": ["radare2", "r2detailed", "disasm", "crewrite", "annotated_asm", "cutter", "ghidra"],
+      "consensus": "7/7 writeups identify checkSerial as the key validation function"
     }
   },
   {
@@ -13,8 +17,12 @@
     "tier": 1,
     "type": "add_hypothesis",
     "payload": {
-      "claim": "Look at the cmp and strlen calls in the disassembly — the binary checks the input length against a specific value before doing any other validation.",
+      "claim": "The binary checks the length of the input before doing any other validation. Understanding the required length is the first step to understanding the validation algorithm.",
       "confidence": "medium"
+    },
+    "derivation": {
+      "supporting_writeups": ["radare2", "r2detailed", "disasm", "crewrite", "annotated_asm", "cutter", "ghidra"],
+      "consensus": "7/7 writeups identify a strlen-based length check as the first validation step"
     }
   },
   {
@@ -22,8 +30,12 @@
     "tier": 2,
     "type": "add_hypothesis",
     "payload": {
-      "claim": "The loop in checkSerial increments by 2 and compares adjacent characters using sub and cmp. This means the validation depends on the relationship between character pairs, not individual characters.",
+      "claim": "The validation loop processes the input in pairs of adjacent characters and checks an arithmetic relationship between each pair. The validation depends on the relationship between character pairs, not on individual character values.",
       "confidence": "medium"
+    },
+    "derivation": {
+      "supporting_writeups": ["radare2", "r2detailed", "disasm", "crewrite", "annotated_asm", "cutter", "ghidra"],
+      "consensus": "7/7 writeups identify the pairwise character comparison with arithmetic constraint"
     }
   }
 ]

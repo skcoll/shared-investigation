@@ -1,0 +1,46 @@
+{
+  "source": "Anonymous (my_solution.txt)",
+  "tool": "Ghidra, GDB",
+  "steps": [
+    {
+      "type": "observation",
+      "content": "The binary has no debug symbols",
+      "evidence": "There is no debug symbols"
+    },
+    {
+      "type": "action",
+      "content": "Used Ghidra to decompile and locate main function from entrypoint",
+      "evidence": "Check the binary with Ghidra, we can find main function in entrypoint"
+    },
+    {
+      "type": "observation",
+      "content": "main uses scanf for input and compares against an encrypted string 'fhz4yhx|~g=5' via FUN_001013e3",
+      "evidence": "Here we can see scanf and some strange constants. Program compares the input with strange string \"fhz4yhx|~g=5\""
+    },
+    {
+      "type": "observation",
+      "content": "FUN_00101348 is a print wrapper that first decodes a string via FUN_00101218",
+      "evidence": "Here we can see the output and one more function before it(FUN_00101218)"
+    },
+    {
+      "type": "observation",
+      "content": "FUN_00101218 is a character-by-character cipher: init value 0x7b1, each step value = (value*7) & 0xffff, char += (value//10)*10 - value",
+      "evidence": "local_14 = 0x7b1... local_14 = local_14 * 7 & 0xffff; *local_10 = *local_10 + ((char)((int)local_14 / 10) * '\\n' - (char)local_14)"
+    },
+    {
+      "type": "hypothesis",
+      "content": "The cipher effectively subtracts (value % 10) from each character",
+      "evidence": "It looks like basic string encryption... c = c + (number // 10) * 10 - number"
+    },
+    {
+      "type": "action",
+      "content": "Implemented the decoder in Python and decoded the password string",
+      "evidence": "print(convert('fhz4yhx|~g=5'))  -->>   ccs-passwd44"
+    },
+    {
+      "type": "result",
+      "content": "Decoded password is ccs-passwd44, verified by also decoding 'Ftyynjy*' to 'Correct!'",
+      "evidence": "print(convert('Ftyynjy*'))  -->>  \"Correct!\""
+    }
+  ]
+}

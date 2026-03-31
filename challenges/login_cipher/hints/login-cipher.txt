@@ -1,0 +1,64 @@
+I disassembled main and found that the calls to the function at 0x1348
+take string arguments that appear obfuscated.  I examined the code in
+that function and found where the strings are decoded before being
+printed (function at 0x1218).  I stepped through this function several
+times, watching how the strings are decoded a piece at a time.
+
+The solution was a matter of decoding all of the strings, until finding
+one that is the correct password.
+
+I can recreate my steps approximately, by starting with the disassembly
+of the main function:
+
+    | 167: int main (int argc, char **argv, char **envp);
+    |          ; var int64_t var_50h @ rbp-0x50
+    |          ; var int64_t var_8h @ rbp-0x8
+    |          0x000012a1      55             push rbp
+    |          0x000012a2      4889e5         mov rbp, rsp
+    |          0x000012a5      4883ec50       sub rsp, 0x50
+    |          0x000012a9      64488b042528.  mov rax, qword fs:[0x28]
+    |          0x000012b2      488945f8       mov qword [var_8h], rax
+    |          0x000012b6      31c0           xor eax, eax
+    |          0x000012b8      be01000000     mov esi, 1                  ; int64_t arg2
+    |          0x000012bd      488d3d400d00.  lea rdi, str.Gtu.__uj_fq_p  ; 0x2004 ; "Gtu.}'uj{fq!p{$" ; char *arg1
+    |          0x000012c4      e87f000000     call fcn.00001348
+    |          0x000012c9      be00000000     mov esi, 0                  ; int64_t arg2
+    |          0x000012ce      488d3d3f0d00.  lea rdi, str.Lszl           ; 0x2014 ; "Lszl{{%\x82vx{!whvt|twg?%" ; char *arg1
+    |          0x000012d5      e86e000000     call fcn.00001348
+    |          0x000012da      488d45b0       lea rax, [var_50h]
+    |          0x000012de      4889c6         mov rsi, rax
+    |          0x000012e1      488d3d430d00.  lea rdi, str.64             ; 0x202b ; "%64[^\n]" ; const char *format
+    |          0x000012e8      b800000000     mov eax, 0
+    |          0x000012ed      e87efdffff     call sym.imp.__isoc99_scanf ; int scanf(const char *format)
+    |          0x000012f2      488d45b0       lea rax, [var_50h]
+    |          0x000012f6      488d35360d00.  lea rsi, str.fhz4yhx__g_5   ; 0x2033 ; "fhz4yhx|~g=5" ; int64_t arg2
+    |          0x000012fd      4889c7         mov rdi, rax                ; int64_t arg1
+    |          0x00001300      e8de000000     call fcn.000013e3
+    |          0x00001305      85c0           test eax, eax
+
+I ran the program in radare2, setting a break point at 0x000012c4.
+When execution reached the first breakpoint, I changed the value of
+rdi from 0x2004 ("Gtu.}'uj{fq!p{$") to 0x2033 ("fhz4yhx|~g=5").  After
+continuing execution, the program printed the password instead of
+the warning not to simply patch the binary:
+
+    | [0x7f2d649b1090]> db 0x5626032ee2c4
+    | [0x7f2d649b1090]> db 0x5626032ee2c9
+    | [0x7f2d649b1090]> dc
+    | hit breakpoint at: 5626032ee2c4
+    | [0x5626032ee2c4]> dr rdi=0x5626032ef033
+    | 0x5626032ef004 ->0x5626032ef033
+    | [0x5626032ee2c4]> dc
+    | ccs-passwd44
+    | hit breakpoint at: 5626032ee2c9
+
+With this value in hand ("ccs-passwd44"), I can prove that it is the
+correct value by running the program:
+
+    | :) atlantis crackmes ./login
+    | Don't patch it!
+    | Insert your password: ccs-passwd44
+    | Correct!
+    | :) atlantis crackmes 
+
+-Yakov-

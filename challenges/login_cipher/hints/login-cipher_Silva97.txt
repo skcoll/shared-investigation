@@ -1,0 +1,246 @@
+We start by analyzing a commonly used procedure fcn.00001348(char*, int) [in rdi and rsi respectively] as follows:
+
+155: fcn.00001348 (char *arg1, int64_t arg2);
+; var int64_t var_11ch @ rbp-0x11c
+; var int64_t var_118h @ rbp-0x118
+; var int64_t var_110h @ rbp-0x110
+; var int64_t var_8h @ rbp-0x8
+; arg char *arg1 @ rdi
+; arg int64_t arg2 @ rsi
+0x00001348      push    rbp
+0x00001349      mov     rbp, rsp
+0x0000134c      sub     rsp, 0x120
+
+// Arguments
+0x00001353      mov     qword [var_118h], rdi ; arg1
+0x0000135a      mov     eax, esi   ; arg2
+
+// Store arg2 into var_11ch
+0x0000135c      mov     byte [var_11ch], al
+
+// Loading of stackguard into var_8h
+0x00001362      mov     rax, qword fs:[0x28]
+0x0000136b      mov     qword [var_8h], rax
+
+// Copying from arg1 to var_110h
+0x0000136f      xor     eax, eax
+0x00001371      mov     rdx, qword [var_118h]
+0x00001378      lea     rax, [var_110h]
+0x0000137f      mov     rsi, rdx   ; const char *src
+0x00001382      mov     rdi, rax   ; char *dest
+0x00001385      call    strcpy     ; sym.imp.strcpy ; char *strcpy(char *dest, const char *src)
+
+// Call fcn.0000128 with var_110h
+0x0000138a      lea     rax, [var_110h]
+0x00001391      mov     rdi, rax   ; int64_t arg1
+0x00001394      call    fcn.00001218
+
+0x00001399      cmp     byte [var_11ch], 0
+0x000013a0      je      0x13b3
+
+// Case where var_11ch = arg2 = 1
+0x000013a2      lea     rax, [var_110h]
+0x000013a9      mov     rdi, rax   ; const char *s
+0x000013ac      call    puts       ; sym.imp.puts ; int puts(const char *s)
+0x000013b1      jmp     0x13cc
+
+// Case where var_11ch = arg2 = 0
+0x000013b3      mov     rdx, qword [stdout] ; 0x4018
+0x000013ba      lea     rax, [var_110h]
+0x000013c1      mov     rsi, rdx   ; FILE *stream
+0x000013c4      mov     rdi, rax   ; const char *s
+0x000013c7      call    fputs      ; sym.imp.fputs ; int fputs(const char *s, FILE *stream)
+
+// End of procedure fcn.00001348 (checking of Stackguard)
+0x000013cc      nop
+0x000013cd      mov     rax, qword [var_8h]
+0x000013d1      xor     rax, qword fs:[0x28]
+0x000013da      je      0x13e1
+0x000013dc      call    __stack_chk_fail ; sym.imp.__stack_chk_fail ; void __stack_chk_fail(void)
+0x000013e1      leave
+0x000013e2      ret
+
+Here, we conclude that:
+- fcn.00001348 applies fcn.00001218 (likely a decoder of sorts) on a string S [initially a copy of arg1]
+- arg2 = 1 displays S as a string using puts(arg1) | arg2 = 0 displays S as string using fputs(arg1, stdout)  
+- No meaningful return value
+
+
+We move on to fcn.00001218, which is a computational loop described as follow:
+
+// --- LOOP INIT ---
+137: fcn.00001218 (int64_t arg1);
+; var int64_t var_18h @ rbp-0x18
+; var int64_t var_ch @ rbp-0xc
+; var int64_t var_8h @ rbp-0x8
+; arg int64_t arg1 @ rdi
+0x00001218      push    rbp
+0x00001219      mov     rbp, rsp
+0x0000121c      mov     qword [var_18h], rdi ; arg1
+0x00001220      mov     rax, qword [var_18h]
+0x00001224      mov     qword [var_8h], rax
+0x00001228      mov     dword [var_ch], 0x7b1 ; 1969
+0x0000122f      jmp     0x1290
+
+--> Here, var_18h = var_8h = starting character of arg1, var_ch = 1969
+
+// --- LOOP COMPARE ---
+0x00001290      mov     rax, qword [var_8h]
+0x00001294      movzx   eax, byte [rax]	
+0x00001297      test    al, al
+0x00001299      jne     0x1231
+
+--> Here, terminate if var_8h is \x00, else go into loop body
+
+// --- LOOP BODY ---
+
+// Manipulation on var_ch --> loks like var_ch = (var_ch * 7) & 0xffff effetively...
+
+0x00001231      mov     edx, dword [var_ch] ; edx = var_ch
+0x00001234      mov     eax, edx			; eax = var_ch
+0x00001236      shl     eax, 3				; eax = var_ch << 3 = 8 * var_ch
+0x00001239      sub     eax, edx			; eax = 8 * var_ch - edx = 7 * var_ch
+0x0000123b      mov     edx, eax			; edx = 7 * var_ch
+0x0000123d      mov     eax, edx			; eax = 7 * var_ch
+0x0000123f      sar     eax, 0x1f			;  
+0x00001242      shr     eax, 0x10			; eax = MSB(7 * var_ch) >> 16 = 15th bit = 0? (somewhat useless because of 0x00001247)
+0x00001245      add     edx, eax			; edx += eax
+0x00001247      movzx   edx, dx				; edx = edx & 0xffff (keep lower 16 bits)
+0x0000124a      sub     edx, eax			; 
+0x0000124c      mov     eax, edx			; 
+0x0000124e      mov     dword [var_ch], eax	; var_ch = edx
+
+0x00001251      mov     rax, qword [var_8h]
+0x00001255      movzx   eax, byte [rax]
+0x00001258      mov     esi, eax					; esi = var_8h (current char)
+
+// Note: this seems like a possible suggestion... https://stackoverflow.com/questions/2033210/c-fast-division-mod-by-10x
+// 1969 * 1717986919 = 3382716243511 = 0b11 0001 0011 : 1001 1001 1001 1001 1001 1110 0011 0111
+// 				edx  = 11 0001 0011 = 787
+//				edx  >> 2 = 1100 0100 = 196 (division of 10)
+// Note: comments on right show example where ecx = 1969 for visualization ...
+
+0x0000125a      mov     ecx, dword [var_ch]			; ecx = 1969
+0x0000125d      mov     edx, 0x66666667 ; 'gfff'	
+0x00001262      mov     eax, ecx					; eax = ecx = 1969
+0x00001264      imul    edx							; edx:eax = eax * 0x66666667 = 1969 * 1717986919 = 3382716243511
+0x00001266      sar     edx, 2						; edx = edx >> 2 = edx / 4
+0x00001269      mov     eax, ecx					; Remaining steps for signed stuff (I think) 
+0x0000126b      sar     eax, 0x1f					; 
+0x0000126e      sub     edx, eax					; edx = 196 (likely) 
+
+0x00001270      mov     eax, edx					; eax = edx = 196
+0x00001272      shl     eax, 2						; eax = edx << 2 = edx * 4
+0x00001275      add     eax, edx					; eax = (edx << 2) + edx = edx * 5
+0x00001277      add     eax, eax					; eax = ((edx << 2) + edx) * 2 = edx * 10 = 1960
+
+0x00001279      sub     ecx, eax					; ecx = 1969 - 1960 = 9 (basically compute 1969 % 10)
+0x0000127b      mov     edx, ecx					; edx = ecx = 9
+0x0000127d      mov     eax, edx					; eax = edx = ecx = 9
+0x0000127f      sub     esi, eax					; esi = var_8h - 9
+0x00001281      mov     eax, esi					; eax = esi = var_8h - 9
+0x00001283      mov     edx, eax					; edx = eax = esi = var_8h - 9
+
+0x00001285      mov     rax, qword [var_8h]
+0x00001289      mov     byte [rax], dl				; var_8h = dl (new char)
+
+// --- LOOP INCREMENT ---
+0x0000128b      add     qword [var_8h], 1
+
+--> Here proceed to var_8h + 1 = go to next character in var_8h
+
+// --- LOOP EXIT ---
+0x0000129b      mov     rax, qword [var_18h]
+0x0000129f      pop     rbp
+0x000012a0      ret
+
+As there are a couple of operation, a pseudo-C code possibly mimicking the fcn.00001218 is as follows:
+
+void fcn.00001218(char* arg1) {
+	int value = 1969;
+	// Condition
+	while (*arg1 != 0) {
+		// VALUE MANIPULATION
+		var_ch = (var_ch * 7) & 0xffff;
+		// OBTAINING NEW CHARACTER
+		*arg1 -= value % 10;
+		// Increment
+		arg1 += 1;
+	}
+}
+
+The corresponding python code representing the above pseudo C-code for various encoded strings stored in the binary is as follows:
+
+# You can add more if required, those listed here helps in understanding desired program flow
+encoded_strings = [
+	[0x47, 0x74, 0x75, 0x2e, 0x7d, 0x27, 0x75, 0x6a, 0x7b, 0x66, 0x71, 0x21, 0x70, 0x7b, 0x24], # str.Gtu.__uj_fq_p 0x2004 = Don't patch it!
+	[0x66, 0x68, 0x7a, 0x34, 0x79, 0x68, 0x78, 0x7c, 0x7e, 0x67, 0x3d, 0x35], # str.fhz4yhx__g_5 0x2033 = ccs-passwd44
+	[0x46, 0x74, 0x79, 0x79, 0x6e, 0x6a, 0x79, 0x2a], # str.Ftyynjy 0x2040 = Correct!
+	[0x5a, 0x77, 0x76, 0x75, 0x70, 0x28] # str.Zwvup 0x2048 = Wrong!
+]
+
+for s in encoded_strings:
+	v = 1969
+	for i in range(len(s)):
+		v = (v * 7) & 0xffff
+		s[i] = chr(s[i] - (v % 10))
+	print(''.join(s))
+	
+At this juncture, trying ccs-passwd44 already gives us "Correct!", and we are done. For further exploration and having understood fcn.00001218, we now look at the main function as follows: 
+
+167: int main (int argc, char **argv, char **envp);
+; var int64_t var_50h @ rbp-0x50
+; var int64_t var_8h @ rbp-0x8
+0x000012a1      push rbp
+0x000012a2      mov rbp, rsp
+0x000012a5      sub rsp, 0x50
+0x000012a9      mov rax, qword fs:[0x28]
+0x000012b2      mov qword [var_8h], rax
+0x000012b6      xor eax, eax
+
+// STARTING PROMPT (e.g. "Don't patch it!")
+0x000012b8      mov esi, 1         ; int64_t arg2
+0x000012bd      lea rdi, str.Gtu.__uj_fq_p ; 0x2004 ; char *arg1	  
+0x000012c4      call fcn.00001348
+0x000012c9      mov esi, 0         ; int64_t arg2
+0x000012ce      lea rdi, str.Lszl  ; 0x2014 ; char *arg1
+0x000012d5      call fcn.00001348
+
+// GET USER INPUT, STORE IN VAR_50h
+0x000012da      lea rax, [var_50h]
+0x000012de      mov rsi, rax
+0x000012e1      lea rdi, str.64    ; 0x202b ; const char *format
+0x000012e8      mov eax, 0
+0x000012ed      call __isoc99_scanf ; sym.imp.__isoc99_scanf ; int scanf(const char *format)
+
+// CALL fcn.00013e3(USERINPUT, "ccs-passwd44"), WANT RETURN VALUE = 0
+0x000012f2      lea rax, [var_50h]
+0x000012f6      lea rsi, str.fhz4yhx__g_5 ; 0x2033 ; int64_t arg2
+0x000012fd      mov rdi, rax       ; int64_t arg1
+0x00001300      call fcn.000013e3
+0x00001305      test eax, eax
+0x00001307      jne 0x131c
+
+// CORRECT!
+0x00001309      mov esi, 1         ; int64_t arg2
+0x0000130e      lea rdi, str.Ftyynjy ; 0x2040 ; char *arg1
+0x00001315      call fcn.00001348
+0x0000131a      jmp 0x132d
+
+// WRONG!
+0x0000131c      mov esi, 1         ; int64_t arg2
+0x00001321      lea rdi, str.Zwvup ; 0x2049 ; char *arg1
+0x00001328      call fcn.00001348
+
+0x0000132d      mov eax, 0
+0x00001332      mov rdx, qword [var_8h]
+0x00001336      xor rdx, qword fs:[0x28]
+0x0000133f      je 0x1346
+0x00001341      call __stack_chk_fail ; sym.imp.__stack_chk_fail ; void __stack_chk_fail(void)
+0x00001346      leave
+0x00001347      ret
+
+As long as fcn.00013e3(USERINPUT, "ccs-passwd44") returns 0, we are good. There are also other functions (e.g. fcn.00001175) involving some cryptography but perhaps that can be done at another time.
+
+Conclusion: password is "ccs-passwd44".
+
