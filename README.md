@@ -115,10 +115,30 @@ Each step produces a structured JSONL record (18 fields) capturing:
 **Derived metrics** (`instrumentation/metrics.py`):
 - **solve_rate** — fraction of runs that found a valid solution
 - **steps_to_solve** — steps used in solved runs
-- **tool_diversity** — unique tools per run
+- **unique_tools** — distinct tools from the valid set {file, strings, disasm, run_binary, python_eval} called per run; hallucinated tool names (objdump, checksec, etc.) are excluded
 - **repeated_tool_rate** — fraction of steps repeating the previous tool
-- **intervention_uptake** — intervention at step t AND tool called at t+1
-- **action_gap_rate** — model describes action without executing it
+- **intervention_uptake** — fraction of interventions at step t followed by a tool call at step t+1
+- **action_gap_rate** — fraction of steps where the agent describes an action ("I'll run...", "I should try...") but does not emit a tool call
+
+**Example calculation** for a 10-step run:
+
+| Step | Response | Tool | Notes |
+|------|----------|------|-------|
+| 1 | "Let me examine the binary" | `file()` | |
+| 2 | "I'll try running strings next" | — | **action gap** |
+| 3 | "I'll run strings on the binary" | `strings()` | |
+| 4 | "I should disassemble main" | — | **action gap** |
+| 5 | "Let me disassemble checkSerial" | `disasm(checkSerial)` | intervention fired here |
+| 6 | "I'll test a candidate input" | `run_binary(ABCDE...)` | **intervention uptake**: tool at t+1 |
+| 7 | "That failed, trying next pattern" | `run_binary(BCDE...)` | |
+| 8 | "Let me verify with python" | `python_eval(...)` | |
+| 9 | "I'll use objdump for more detail" | — | **action gap** + hallucinated tool name |
+| 10 | SOLUTION: BCDEFGHIJKLMNOPQ | — | solved |
+
+- `action_gap_rate` = 3/10 = **0.30** (steps 2, 4, 9)
+- `unique_tools` = **5** (file, strings, disasm, run_binary, python_eval — objdump excluded)
+- `intervention_uptake` = 1/1 = **1.0** (one intervention at step 5, tool call followed at step 6)
+- `solve_rate` = solved at step 10
 
 ## Results
 
