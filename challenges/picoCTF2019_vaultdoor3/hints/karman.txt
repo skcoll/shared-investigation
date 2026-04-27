@@ -1,3 +1,0 @@
-This time we have another “JAVA” file and we can see that there is a flag which is scrambled and the loops tell us that the input we will be providing the program will check the character positions and if correct we can have the correct flag. The simple solution to this problem is to reverse the logic. Providing the flag which is embedded in the code and then running it through the same loop and adding a print statement to get the exact flag!
-
-

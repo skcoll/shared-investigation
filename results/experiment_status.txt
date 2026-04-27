@@ -1,0 +1,76 @@
+================================================================================
+EXPERIMENT STATUS — 2026-04-01
+All experiments use 20-step budget, 3 runs per condition
+================================================================================
+
+COMPLETED EXPERIMENTS
+================================================================================
+
+1. R1 14B — yurisimplekeygen (15/15 runs)
+   A: baseline/none       0/3 solved | tools=5.7 unique=1.7 gap=0.517
+   B: baseline/light      0/3 solved | tools=9.0 unique=2.0 gap=0.500
+   C: structured/none     0/3 solved | tools=11.7 unique=4.3 gap=0.250
+   D: structured/light    0/3 solved | tools=9.7 unique=3.3 gap=0.167
+   E: structured/strong   1/3 solved | tools=5.7 unique=2.0 gap=0.407
+   * E_1 solved at step 19 with BCDEFGHIJKLMNOPQ
+
+2. R1 14B — login_cipher (15/15 runs)
+   A: baseline/none       0/3 solved | tools=2.7 unique=0.3 gap=0.467
+   B: baseline/light      0/3 solved | tools=2.7 unique=0.7 gap=0.800
+   C: structured/none     0/3 solved | tools=4.7 unique=2.0 gap=0.317
+   D: structured/light    0/3 solved | tools=7.3 unique=4.0 gap=0.433
+   E: structured/strong   0/3 solved | tools=6.0 unique=2.3 gap=0.250
+
+3. Kimi K2 — yurisimplekeygen (15/15 runs)
+   A: baseline/none       3/3 solved | tools=6.7 unique=4.7 gap=0.089
+   B: baseline/light      3/3 solved | tools=6.7 unique=4.7 gap=0.079
+   C: structured/none     2/3 solved | tools=12.0 unique=5.7 gap=0.000
+   D: structured/light    2/3 solved | tools=13.0 unique=4.7 gap=0.000
+   E: structured/strong   2/3 solved | tools=10.3 unique=5.3 gap=0.101
+
+4. Kimi K2 — login_cipher (15/15 runs)
+   A: baseline/none       0/3 solved | tools=18.7 unique=5.0 gap=0.067
+   B: baseline/light      0/3 solved | tools=18.3 unique=5.0 gap=0.067
+   C: structured/none     0/3 solved | tools=18.3 unique=5.7 gap=0.017
+   D: structured/light    0/3 solved | tools=20.0 unique=6.0 gap=0.000
+   E: structured/strong   0/3 solved | tools=19.0 unique=5.3 gap=0.017
+
+
+INCOMPLETE EXPERIMENTS
+================================================================================
+
+5. R1 70B — login_cipher (5/15 runs — tunnel dropped)
+   A: 3 runs done, B: 1 run done, C-E: not started
+
+6. R1 70B — yurisimplekeygen (0/15 runs — tunnel dropped)
+   Not started
+
+
+SUMMARY TABLE: Action Gap by Model × Challenge
+================================================================================
+
+                     yurisimplekeygen              login_cipher
+                   Baseline  Structured          Baseline  Structured
+R1 14B              0.509      0.275               0.634      0.333
+Kimi K2             0.084      0.034               0.067      0.011
+
+Action gap reduction from structured state:
+  R1 14B yuri:    46%
+  R1 14B login:   47%
+  Kimi yuri:      60%
+  Kimi login:     84%
+
+
+SUMMARY TABLE: Tool Diversity by Model × Challenge
+================================================================================
+
+                     yurisimplekeygen              login_cipher
+                   Baseline  Structured          Baseline  Structured
+R1 14B              1.8        3.2                 0.5        2.8
+Kimi K2             4.8        5.2                 5.0        5.7
+
+Tool diversity increase from structured state:
+  R1 14B yuri:    +78%
+  R1 14B login:   +460%
+  Kimi yuri:      +8%
+  Kimi login:     +14%

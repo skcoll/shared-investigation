@@ -51,20 +51,22 @@ def strings(path: str) -> str:
 
 
 def run_binary(challenges_root: str, binary_path: str, input_arg: str) -> str:
-    """Run an ELF binary via Docker with the challenges dir mounted."""
-    # binary_path is absolute on the host; convert to container path
-    # Host: /path/to/challenges/foo/artifacts/Binary
-    # Container: /challenges/foo/artifacts/Binary
+    """Run an ELF binary via Docker with the challenges dir mounted.
+
+    Input is provided both as a command-line argument AND piped via stdin,
+    so binaries that read from either source are supported.
+    """
     rel = str(Path(binary_path).relative_to(challenges_root))
     container_path = f"/challenges/{rel}"
 
     safe_input = input_arg.replace("'", "'\\''")
+    # Pipe input via stdin AND pass as arg — covers both input methods
     cmd = [
-        "docker", "run", "--rm",
+        "docker", "run", "--rm", "-i",
         "--platform", "linux/amd64",
         "-v", f"{challenges_root}:/challenges:ro",
         DOCKER_IMAGE,
-        "sh", "-c", f"{container_path} '{safe_input}'",
+        "sh", "-c", f"echo '{safe_input}' | {container_path} '{safe_input}'",
     ]
     return _run(cmd)
 

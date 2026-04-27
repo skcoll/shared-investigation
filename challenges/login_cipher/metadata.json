@@ -1,6 +1,13 @@
 {
   "id": "login_cipher",
-  "description": "",
-  "artifacts": [],
-  "hints": []
+  "description": "64-bit ELF login program with encoded strings and a cipher-based password check.",
+  "artifacts": [
+    "login"
+  ],
+  "hints": [
+    "writeup_anonymous.json",
+    "writeup_silva97.json",
+    "writeup_vadym.json",
+    "writeup_yakov.json"
+  ]
 }

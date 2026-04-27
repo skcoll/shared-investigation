@@ -40,8 +40,12 @@ def compute_run_metrics(steps: list[dict]) -> dict:
                 solve_step = s["step"]
                 break
 
+    VALID_TOOLS = {"file", "strings", "disasm", "run_binary", "python_eval"}
+
     tool_calls = [s for s in steps if s["tool_called"]]
-    unique_tools = set(s["tool_name"] for s in tool_calls)
+    all_tool_names = set(s["tool_name"] for s in tool_calls)
+    valid_tools_used = all_tool_names & VALID_TOOLS
+    hallucinated_tools = all_tool_names - VALID_TOOLS
     total_steps = len(steps)
 
     # Tool diversity
@@ -81,7 +85,9 @@ def compute_run_metrics(steps: list[dict]) -> dict:
         "solved": solved,
         "solve_step": solve_step,
         "tool_calls": len(tool_calls),
-        "unique_tools": len(unique_tools),
+        "unique_tools": len(valid_tools_used),
+        "hallucinated_tools": len(hallucinated_tools),
+        "hallucinated_tool_names": sorted(hallucinated_tools),
         "tool_distribution": dict(tool_counts),
         "repeated_tool_rate": round(repeated_rate, 3),
         "action_gap_rate": round(action_gap_rate, 3),

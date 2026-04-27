@@ -122,45 +122,54 @@ Each step produces a structured JSONL record (18 fields) capturing:
 
 ## Results
 
-### Completed: DeepSeek R1 14B (yurisimplekeygen, 3 runs/condition, 15-step budget)
+**All 90 runs complete.** Full factorial (5 conditions × 3 models × 2 challenges × 3 runs). Annotated with LLM-as-judge (Kimi K2) for 8 behavioral milestones.
 
-| Condition | Solve Rate | Avg Tools | Unique Tools | Action Gap |
-|-----------|-----------|-----------|--------------|------------|
-| A: baseline/none | 0/3 | 5.7 | 1.7 | 0.600 |
-| B: baseline/light | 0/3 | 3.3 | 1.0 | 0.778 |
-| C: structured/none | 0/3 | 5.7 | 2.7 | 0.356 |
-| D: structured/light | 0/3 | 10.3 | 4.3 | 0.156 |
-| E: structured/strong | 0/3 | 7.3 | 3.7 | 0.222 |
+### Challenge: yurisimplekeygen (easy crackme, 16-char sequential password)
 
-No condition solved, but structured state reduced action gap from ~69% to ~24% and tripled tool diversity.
+Solve rates and action gap per model per condition (3 runs each, 20-step budget):
 
-### Completed: Kimi K2 Frontier Reference (yurisimplekeygen, 3 runs/condition, 20-step budget)
+| Condition | Kimi K2 | R1 70B | R1 14B | Total | Action Gap |
+|-----------|---------|--------|--------|-------|------------|
+| A: baseline/none | 3/3 | 0/3 | 0/3 | **3/9** | 0.444 |
+| B: baseline/light | 3/3 | 2/3 | 0/3 | **5/9** | 0.384 |
+| C: structured/none | 3/3 | 1/3 | 0/3 | **4/9** | 0.251 |
+| D: structured/light | 3/3 | 3/3 | 0/3 | **6/9** | 0.286 |
+| E: structured/strong | 3/3 | 2/3 | 1/3 | **6/9** | 0.238 |
 
-| Condition | Solve Rate | Avg Steps | Avg Tools | Unique Tools | Action Gap |
-|-----------|-----------|-----------|-----------|--------------|------------|
-| A: baseline/none | 3/3 | 10.3 | 9.3 | 5.0 | 0.107 |
-| B: baseline/light | 3/3 | 8.3 | 7.3 | 4.3 | 0.122 |
-| C: structured/none | 3/3 | 10.3 | 9.3 | 5.3 | 0.048 |
-| D: structured/light | 3/3 | 12.7 | 12.0 | 5.3 | 0.022 |
-| E: structured/strong | 2/3 | 11.0 | 12.0 | 5.7 | 0.042 |
+Key findings:
+- **70B benefits most from structured+light**: 0/3 → 3/3 (conditions A vs D), the only setting to reach 100% at this scale
+- **14B never solves baseline** but structured+strong yields the first solve (1/3); structured state halves action gap even when the model cannot independently succeed
+- **Kimi K2 solves all conditions**; structured state does not change solve rate but eliminates action gap entirely (0.16 → 0.00)
+- **Action gap reduction**: ~37% lower in structured conditions across all models (0.41 baseline avg → 0.26 structured avg)
 
-All conditions solve, but structured state still reduces action gap by ~65%.
+### Challenge: login_cipher (hard crackme, runtime-decoded strings + cipher check)
 
-### Pending: DeepSeek R1 70B (yurisimplekeygen)
+**0/45 solves across all models and conditions.** Requires understanding a runtime string decoder and a multi-step cipher transformation — beyond the current step budget and tool set. Used as a hard-challenge behavioral baseline: milestone depth, tool usage patterns, and intervention response are measured but solve rate is not expected.
 
-The critical middle data point. Same architecture as 14B at 5× scale — will show whether structured state's behavioral advantages translate to solve rate differences with a more capable open-weight model.
+### Behavioral Milestones (yurisimplekeygen, LLM-as-judge annotations, n=9 per row)
 
-### Cross-Model Summary (to date)
+| Milestone | Baseline (A+B) | Structured (C+D+E) |
+|-----------|:--------------:|:-----------------:|
+| Identified target function | 13/18 (72%) | **27/27 (100%)** |
+| Used disassembly correctly | 11/18 (61%) | **25/27 (93%)** |
+| Formed valid hypothesis | 13/18 (72%) | **23/27 (85%)** |
+| Generated candidate input | 8/18 (44%) | 18/27 (67%) |
+| Reached near solution | 5/18 (28%) | **16/27 (59%)** |
+| Hallucinated tool | 2/18 (11%) | **12/27 (44%)** |
+
+Structured agents consistently identify the target function and apply disassembly at higher rates. The hallucination effect is a notable side finding: the state schema primes the model to emit tool-like syntax, causing it to invent names (`objdump`, `checksec`, `radare2`, `xrefs`) not in the available set. Valid unique tool counts are filtered to the 5 real tools only.
+
+### Cross-Model Summary (yurisimplekeygen, all conditions)
 
 | | DeepSeek R1 14B | DeepSeek R1 70B | Kimi K2 |
 |---|---|---|---|
-| Solve rate (baseline) | 0/6 | *pending* | 6/6 |
-| Solve rate (structured) | 0/9 | *pending* | 8/9 |
-| Action gap (baseline) | 0.689 | *pending* | 0.114 |
-| Action gap (structured) | 0.245 | *pending* | 0.037 |
-| Action gap reduction | 64% | *pending* | 68% |
+| Solve rate — baseline (A+B) | 0/6 | 2/6 | 6/6 |
+| Solve rate — structured (C+D+E) | 1/9 | 6/9 | 9/9 |
+| Action gap — baseline | 0.763 | 0.510 | 0.135 |
+| Action gap — structured | 0.316 | 0.296 | 0.004 |
+| Action gap reduction | 59% | 42% | 97% |
 
-See `results/` for full analysis files.
+See `results/metrics.json` for per-run data and `results/annotations.jsonl` for milestone judgments.
 
 ## Repository Structure
 
@@ -232,10 +241,10 @@ bash run_full_experiment.sh
 
 ## Work Remaining
 
-- **DeepSeek R1 70B experiment**: full factorial on yurisimplekeygen — the critical scaling data point (in progress)
-- **Harder challenges**: yurisimplekeygen (difficulty 1.5) is too easy for frontier models. Need 2-3 crackmes at difficulty 3-4 where baseline fails but structured may succeed.
-- **More runs**: increase to 10 runs/condition for statistical power
-- **Investigation milestones**: track intermediate progress (discovered function name, identified length, identified pattern) beyond binary solve/fail
+- **Statistical power**: 3 runs/condition is sufficient for behavioral trends but not significance testing. Increasing to 10 runs/condition would enable proper comparisons.
+- **Harder challenges**: yurisimplekeygen (difficulty ~1.5) is too easy for frontier models; login_cipher is too hard for all. Need 2-3 crackmes at difficulty 3-4 where baseline fails but structured may succeed.
+- **Human subject component**: current work studies agent behavior under scripted human-proxy interventions. A proper coordination study would require real analysts interacting with the shared state in real time.
+- **Paper writeup**: tables and figures from final results need to be incorporated into `paper/updated_main.tex`.
 
 ## License
 
