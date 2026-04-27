@@ -148,13 +148,13 @@ Each step produces a structured JSONL record (18 fields) capturing:
 
 Solve rates and action gap per model per condition (3 runs each, 20-step budget):
 
-| Condition | Kimi K2 | R1 70B | R1 14B | Total | Action Gap |
-|-----------|---------|--------|--------|-------|------------|
-| A: baseline/none | 3/3 | 0/3 | 0/3 | **3/9** | 0.444 |
-| B: baseline/light | 3/3 | 2/3 | 0/3 | **5/9** | 0.384 |
-| C: structured/none | 3/3 | 1/3 | 0/3 | **4/9** | 0.251 |
-| D: structured/light | 3/3 | 3/3 | 0/3 | **6/9** | 0.286 |
-| E: structured/strong | 3/3 | 2/3 | 1/3 | **6/9** | 0.238 |
+| Condition | Kimi K2 | R1 70B | R1 14B | Total | Solve % | Action Gap |
+|-----------|---------|--------|--------|-------|---------|------------|
+| A: baseline/none | 3/3 | 0/3 | 0/3 | 3/9 | 33% | 0.444 |
+| B: baseline/light | 3/3 | 2/3 | 0/3 | 5/9 | 56% | 0.384 |
+| C: structured/none | 3/3 | 1/3 | 0/3 | 4/9 | 44% | 0.251 |
+| D: structured/light | 3/3 | 3/3 | 0/3 | 6/9 | **67%** | 0.286 |
+| E: structured/strong | 3/3 | 2/3 | 1/3 | 6/9 | **67%** | 0.238 |
 
 Key findings:
 - **70B benefits most from structured+light**: 0/3 → 3/3 (conditions A vs D), the only setting to reach 100% at this scale
