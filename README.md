@@ -115,7 +115,7 @@ Each step produces a structured JSONL record (18 fields) capturing:
 **Derived metrics** (`instrumentation/metrics.py`):
 - **solve_rate** — fraction of runs that found a valid solution
 - **steps_to_solve** — steps used in solved runs
-- **unique_tools** — distinct tools from the valid set {file, strings, disasm, run_binary, python_eval} called per run; hallucinated tool names (objdump, checksec, etc.) are excluded
+- **unique_tools** — distinct tools from the prompt-specified set {file, strings, disasm, run_binary, python_eval} called per run; calls to tools outside this set (objdump, checksec, etc.) are excluded
 - **repeated_tool_rate** — fraction of steps repeating the previous tool
 - **intervention_uptake** — fraction of interventions at step t followed by a tool call at step t+1
 - **action_gap_rate** — fraction of steps where the agent describes an action ("I'll run...", "I should try...") but does not emit a tool call
@@ -179,7 +179,7 @@ Key findings:
 | Reached near solution | 5/18 (28%) | **16/27 (59%)** |
 | Hallucinated tool | 2/18 (11%) | **12/27 (44%)** |
 
-Structured agents consistently identify the target function and apply disassembly at higher rates. The hallucination effect is a notable side finding: the state schema primes the model to emit tool-like syntax, causing it to invent names (`objdump`, `checksec`, `radare2`, `xrefs`) not in the available set. Valid unique tool counts are filtered to the 5 real tools only.
+Structured agents consistently identify the target function and apply disassembly at higher rates. The hallucination effect is a notable side finding: the state schema primes the model to emit tool-like syntax, causing it to invent names (`objdump`, `checksec`, `radare2`, `xrefs`) not in the available set. Valid unique tool counts are filtered to the 5 prompt-specified tools only.
 
 ### Cross-Model Summary (yurisimplekeygen, all conditions)
 
