@@ -187,8 +187,8 @@ Structured agents consistently identify the target function and apply disassembl
 |---|---|---|---|
 | Solve rate — baseline (A+B) | 0/6 | 2/6 | 6/6 |
 | Solve rate — structured (C+D+E) | 1/9 | 6/9 | 9/9 |
-| Action gap — baseline | 0.763 | 0.510 | 0.135 |
-| Action gap — structured | 0.316 | 0.296 | 0.004 |
+| Action gap — baseline (A+B) | 0.763 | 0.510 | 0.135 |
+| Action gap — structured (C+D+E) | 0.316 | 0.296 | 0.004 |
 | Action gap reduction | 59% | 42% | 97% |
 
 See `results/metrics.json` for per-run data and `results/annotations.jsonl` for milestone judgments.
